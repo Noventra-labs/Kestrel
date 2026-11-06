@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Beam</AssemblyName>
+    <RootNamespace>Beam</RootNamespace>
+    <ApplicationIcon>beam.ico</ApplicationIcon>
+    <Version>2.3.0</Version>
+    <FileVersion>2.3.0.0</FileVersion>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <Company>Noventra Labs</Company>
+    <Authors>Noventra Labs</Authors>
+    <Product>Beam</Product>
+    <AssemblyTitle>Beam Launcher by Noventra Labs</AssemblyTitle>
+    <Copyright>Copyright © 2026 Noventra Labs. All rights reserved.</Copyright>
+    <Description>High-Definition Raycast for Windows Clone by Noventra Labs</Description>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredPGO>true</TieredPGO>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="beam.ico" />
+  </ItemGroup>
+
+</Project>

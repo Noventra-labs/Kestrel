@@ -1,0 +1,38 @@
+# Visual Studio / .NET
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.pidb
+*.pdb
+
+# Compiled binaries
+*.exe
+*.dll
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.pytest_cache/
+
+# Sensitive Environment Configurations
+.env
+!.env.example
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# OS Generated
+Thumbs.db
+Desktop.ini
+.DS_Store
