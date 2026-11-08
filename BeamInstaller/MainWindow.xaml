@@ -1,239 +1,315 @@
 <Window x:Class="BeamInstaller.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Beam v2.3.0 Setup — Noventra Labs"
-        Width="680" Height="460"
+        Title="Beam Setup — Noventra Labs"
+        Width="520" Height="370"
         WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
         ResizeMode="NoResize"
-        Background="#111318"
+        Background="Transparent"
         Icon="beam.ico"
         FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif">
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="60" />
-        </Grid.RowDefinitions>
-
-        <!-- Main Content Area (Left Brand Sidebar + Right Wizard Step Pages) -->
-        <Grid Grid.Row="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <!-- Left Brand Banner (Noventra Labs) -->
-            <Border Grid.Column="0" Background="#161922" BorderBrush="#252B3B" BorderThickness="0,0,1,0" Padding="22,26">
-                <Grid>
-                    <StackPanel VerticalAlignment="Top">
-                        <!-- Glowing Diamond Icon -->
-                        <Border Width="52" Height="52" CornerRadius="14" Background="#24FF6363" BorderBrush="#66FF6363" BorderThickness="1" HorizontalAlignment="Left" Margin="0,0,0,16">
-                            <Path Width="26" Height="26" Stretch="Uniform" Fill="#FF6363" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  Data="M 0,10 L 10,0 L 20,10 L 10,20 Z M 4.5,10 L 10,4.5 L 15.5,10 L 10,15.5 Z" />
-                        </Border>
-
-                        <TextBlock Text="Beam" Foreground="#FFFFFF" FontSize="22" FontWeight="Bold" />
-                        <TextBlock Text="Version 2.3.0 (64-bit)" Foreground="#9CA3AF" FontSize="12" Margin="0,2,0,4" />
-                        <Border Background="#232938" CornerRadius="4" Padding="7,2" HorizontalAlignment="Left" Margin="0,2,0,24">
-                            <TextBlock Text="Noventra Labs" Foreground="#FF8585" FontSize="11" FontWeight="SemiBold" />
-                        </Border>
-
-                        <!-- Wizard Step Indicators -->
-                        <StackPanel>
-                            <TextBlock x:Name="StepIndicator1" Text="●  1. Welcome &amp; License" Foreground="#FFFFFF" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,10" />
-                            <TextBlock x:Name="StepIndicator2" Text="○  2. Install Options" Foreground="#6B7280" FontSize="12.5" Margin="0,0,0,10" />
-                            <TextBlock x:Name="StepIndicator3" Text="○  3. Installing Files" Foreground="#6B7280" FontSize="12.5" Margin="0,0,0,10" />
-                            <TextBlock x:Name="StepIndicator4" Text="○  4. Finish Setup" Foreground="#6B7280" FontSize="12.5" />
+    <Window.Resources>
+        <!-- Minimal Modern Checkbox Style -->
+        <Style x:Key="MinimalCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Background="Transparent">
+                            <Border x:Name="BoxBorder"
+                                    Width="17" Height="17"
+                                    CornerRadius="4"
+                                    Background="#161922"
+                                    BorderBrush="#32394A"
+                                    BorderThickness="1"
+                                    Margin="0,0,10,0"
+                                    VerticalAlignment="Center">
+                                <Path x:Name="CheckMark"
+                                      Width="10" Height="8"
+                                      Stretch="Uniform"
+                                      Stroke="#FFFFFF"
+                                      StrokeThickness="2"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Data="M 1,4 L 4,7 L 9,1"
+                                      Visibility="Collapsed"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                            </Border>
+                            <ContentPresenter VerticalAlignment="Center" />
                         </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="BoxBorder" Property="Background" Value="#FF6363" />
+                                <Setter TargetName="BoxBorder" Property="BorderBrush" Value="#FF6363" />
+                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BoxBorder" Property="BorderBrush" Value="#FF8080" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Outer Rounded Card -->
+    <Border Background="#101218"
+            BorderBrush="#242938"
+            BorderThickness="1"
+            CornerRadius="12"
+            ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="56" />
+            </Grid.RowDefinitions>
+
+            <!-- Top Minimal Drag Title Bar -->
+            <Border Grid.Row="0"
+                    Background="#0C0E13"
+                    BorderBrush="#1A1E29"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,0"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Path Width="11" Height="11" Stretch="Uniform" Fill="#FF6363" Margin="0,0,8,0"
+                              Data="M 0,6 L 6,0 L 12,6 L 6,12 Z" />
+                        <TextBlock Text="Beam Setup" Foreground="#9CA3AF" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <TextBlock VerticalAlignment="Bottom"
-                               Text="© 2026 Noventra Labs&#x0a;Official Windows Installer"
-                               Foreground="#6B7280"
-                               FontSize="11"
-                               LineHeight="16" />
+                    <Border HorizontalAlignment="Right"
+                            Width="24" Height="24"
+                            CornerRadius="5"
+                            Background="Transparent"
+                            Cursor="Hand"
+                            MouseLeftButtonDown="BtnCancel_Click">
+                        <TextBlock Text="✕" Foreground="#6B7280" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
                 </Grid>
             </Border>
 
-            <!-- Right Wizard Pages -->
-            <Grid Grid.Column="1" Margin="28,24,28,20">
-                <!-- ========================================================= -->
-                <!-- PAGE 1: WELCOME & LICENSE AGREEMENT                       -->
-                <!-- ========================================================= -->
-                <StackPanel x:Name="PageWelcome" Visibility="Visible">
-                    <TextBlock Text="Welcome to the Beam Setup Wizard" Foreground="#F9FAFB" FontSize="19" FontWeight="Bold" Margin="0,0,0,6" />
-                    <TextBlock Text="This wizard will install Beam v2.3.0 (published by Noventra Labs) on your computer."
-                               Foreground="#9CA3AF" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,16" />
-
-                    <TextBlock Text="END-USER SOFTWARE LICENSE &amp; FEATURE OVERVIEW" Foreground="#FF6363" FontSize="11" FontWeight="Bold" Margin="0,0,0,6" />
-                    <Border Background="#161922" BorderBrush="#282F3F" BorderThickness="1" CornerRadius="7" Height="175" Padding="12,10" Margin="0,0,0,14">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <TextBlock Foreground="#D1D5DB" FontSize="12" LineHeight="18" TextWrapping="Wrap"
-                                       Text="Beam Launcher for Windows&#x0a;Publisher: Noventra Labs&#x0a;Version: 2.3.0 (Windows 10 / 11 x64)&#x0a;&#x0a;Included Features:&#x0a;• Global Start Key (Windows Key) &amp; Alt+Space Launcher&#x0a;• Embedded Google Gemini AI Chat (WebView2 &amp; Fast API Stream)&#x0a;• Raycast Fuzzy + Acronym Search &amp; Frecency Learning&#x0a;• 15 Window Management Snapping Layouts (DWM Frame Compensated)&#x0a;• Zero-CPU Event-Driven Clipboard History Manager &amp; Auto-Paste&#x0a;• Instant Local File Search Indexer (Ctrl+F)&#x0a;• Smart Calculator, Unit, Currency &amp; World Timezone Converter&#x0a;&#x0a;By installing this software, you agree to the Noventra Labs End-User License Agreement. This software is provided by Noventra Labs for personal and commercial productivity use on Windows." />
-                        </ScrollViewer>
-                    </Border>
-
-                    <CheckBox x:Name="ChkAcceptLicense"
-                              Content="I accept the terms in the Noventra Labs License Agreement"
-                              Foreground="#F9FAFB"
-                              FontSize="13"
-                              IsChecked="True"
-                              Checked="ChkAcceptLicense_Changed"
-                              Unchecked="ChkAcceptLicense_Changed" />
-                </StackPanel>
+            <!-- Center Content Area -->
+            <Grid Grid.Row="1" Margin="28,22,28,16">
 
                 <!-- ========================================================= -->
-                <!-- PAGE 2: DESTINATION FOLDER & SHORTCUT OPTIONS             -->
+                <!-- VIEW 1: MINIMAL SINGLE-PAGE SETUP                         -->
                 <!-- ========================================================= -->
-                <StackPanel x:Name="PageOptions" Visibility="Collapsed">
-                    <TextBlock Text="Destination Folder &amp; Shortcuts" Foreground="#F9FAFB" FontSize="19" FontWeight="Bold" Margin="0,0,0,6" />
-                    <TextBlock Text="Select where Noventra Labs Beam should be installed and choose your startup preferences."
-                               Foreground="#9CA3AF" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,14" />
+                <StackPanel x:Name="PageSetup" Visibility="Visible">
+                    <!-- Brand Header -->
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="INSTALLATION FOLDER" Foreground="#FF6363" FontSize="11" FontWeight="Bold" Margin="0,0,0,6" />
-                    <Grid Margin="0,0,0,16">
+                        <Border Grid.Column="0" Width="46" Height="46" CornerRadius="12" Background="#1FFF6363" BorderBrush="#55FF6363" BorderThickness="1" Margin="0,0,14,0">
+                            <Path Width="22" Height="22" Stretch="Uniform" Fill="#FF6363" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M 0,10 L 10,0 L 20,10 L 10,20 Z M 4.5,10 L 10,4.5 L 15.5,10 L 10,15.5 Z" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Beam" Foreground="#F9FAFB" FontSize="19" FontWeight="Bold" />
+                                <Border Background="#1C202C" BorderBrush="#2B3142" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="v2.3.0" Foreground="#9CA3AF" FontSize="10.5" FontWeight="SemiBold" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="Fast, native command bar and launcher for Windows." Foreground="#9CA3AF" FontSize="12" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Destination Folder -->
+                    <TextBlock Text="INSTALL LOCATION" Foreground="#6B7280" FontSize="10" FontWeight="Bold" Margin="2,0,0,6" />
+                    <Grid Margin="0,0,0,18">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="TxtInstallDir"
                                  Grid.Column="0"
-                                 Background="#181C26"
-                                 Foreground="#FFFFFF"
-                                 BorderBrush="#323A4E"
+                                 Background="#151821"
+                                 Foreground="#D1D5DB"
+                                 CaretBrush="#FF6363"
+                                 BorderBrush="#242A38"
                                  BorderThickness="1"
-                                 Padding="10,6"
-                                 FontSize="12.5" />
-                        <Button Grid.Column="1"
-                                Content="Browse..."
+                                 Padding="10,7"
+                                 FontSize="12" />
+                        <Border Grid.Column="1"
+                                Background="#1B202C"
+                                BorderBrush="#2D3446"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="12,7"
                                 Margin="8,0,0,0"
-                                Padding="14,6"
-                                Background="#252C3D"
-                                Foreground="#FFFFFF"
-                                BorderBrush="#3B455E"
                                 Cursor="Hand"
-                                Click="BrowseFolder_Click" />
+                                MouseLeftButtonDown="BrowseFolder_Click">
+                            <TextBlock Text="Change" Foreground="#E5E7EB" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
+                        </Border>
                     </Grid>
 
-                    <TextBlock Text="ADDITIONAL TASKS &amp; INTEGRATION" Foreground="#FF6363" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                    <!-- Minimal Essential Options -->
+                    <TextBlock Text="OPTIONS" Foreground="#6B7280" FontSize="10" FontWeight="Bold" Margin="2,0,0,8" />
+                    <Border Background="#141720" BorderBrush="#212634" BorderThickness="1" CornerRadius="8" Padding="14,12">
+                        <StackPanel>
+                            <CheckBox x:Name="OptLaunchOnBoot"
+                                      Style="{StaticResource MinimalCheckBoxStyle}"
+                                      Content="Launch automatically at Windows sign-in"
+                                      Margin="0,0,0,9"
+                                      IsChecked="True" />
 
-                    <CheckBox x:Name="OptDesktopShortcut"
-                              Content="Create a Desktop shortcut for Beam"
-                              Foreground="#F9FAFB" FontSize="13" Margin="0,0,0,9" IsChecked="True" />
+                            <CheckBox x:Name="OptConfigureWinHook"
+                                      Style="{StaticResource MinimalCheckBoxStyle}"
+                                      Content="Enable Windows Key &amp; Alt + Space global shortcuts"
+                                      Margin="0,0,0,9"
+                                      IsChecked="True" />
 
-                    <CheckBox x:Name="OptStartMenuShortcut"
-                              Content="Create a Start Menu Programs shortcut (Noventra Labs \ Beam)"
-                              Foreground="#F9FAFB" FontSize="13" Margin="0,0,0,9" IsChecked="True" />
-
-                    <CheckBox x:Name="OptLaunchOnBoot"
-                              Content="Launch Beam automatically when Windows starts (Keep alive in System Tray)"
-                              Foreground="#F9FAFB" FontSize="13" Margin="0,0,0,9" IsChecked="True" />
-
-                    <CheckBox x:Name="OptConfigureWinHook"
-                              Content="Enable Start Button (Windows Key) &amp; Alt+Space global hook optimization"
-                              Foreground="#F9FAFB" FontSize="13" Margin="0,0,0,9" IsChecked="True" />
-
-                    <CheckBox x:Name="OptRegisterUninstall"
-                              Content="Register in Windows Installed Apps (Publisher: Noventra Labs)"
-                              Foreground="#F9FAFB" FontSize="13" IsChecked="True" />
-                </StackPanel>
-
-                <!-- ========================================================= -->
-                <!-- PAGE 3: INSTALLING PROGRESS & ACTIVITY LOG                -->
-                <!-- ========================================================= -->
-                <StackPanel x:Name="PageInstalling" Visibility="Collapsed">
-                    <TextBlock x:Name="InstallingHeaderTitle" Text="Installing Beam..." Foreground="#F9FAFB" FontSize="19" FontWeight="Bold" Margin="0,0,0,6" />
-                    <TextBlock x:Name="InstallingStepLabel" Text="Preparing installation package..." Foreground="#9CA3AF" FontSize="12.5" Margin="0,0,0,14" />
-
-                    <ProgressBar x:Name="InstallProgressBar"
-                                 Height="14"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 Value="0"
-                                 Background="#1A1E29"
-                                 Foreground="#FF6363"
-                                 BorderBrush="#2E3648"
-                                 Margin="0,0,0,14" />
-
-                    <Border Background="#161922" BorderBrush="#282F3F" BorderThickness="1" CornerRadius="7" Height="185" Padding="10">
-                        <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto">
-                            <TextBlock x:Name="InstallLogText"
-                                       Foreground="#D1D5DB"
-                                       FontFamily="Consolas, Segoe UI"
-                                       FontSize="11.5"
-                                       LineHeight="17"
-                                       TextWrapping="Wrap" />
-                        </ScrollViewer>
+                            <CheckBox x:Name="OptCreateShortcuts"
+                                      Style="{StaticResource MinimalCheckBoxStyle}"
+                                      Content="Create Desktop &amp; Start Menu shortcuts"
+                                      IsChecked="True" />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
 
                 <!-- ========================================================= -->
-                <!-- PAGE 4: COMPLETED SETUP WIZARD                            -->
+                <!-- VIEW 2: SMOOTH INSTALLATION PROGRESS UX                   -->
                 <!-- ========================================================= -->
-                <StackPanel x:Name="PageComplete" Visibility="Collapsed">
-                    <TextBlock Text="Completed the Beam Setup Wizard" Foreground="#F9FAFB" FontSize="19" FontWeight="Bold" Margin="0,0,0,8" />
-                    <TextBlock x:Name="CompleteSummaryText"
-                               Text="Beam v2.3.0 by Noventra Labs has been successfully installed on your computer."
-                               Foreground="#D1D5DB" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,18" />
+                <StackPanel x:Name="PageInstalling" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" Width="420">
+                    <Border Width="48" Height="48" CornerRadius="13" Background="#1FFF6363" BorderBrush="#55FF6363" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,16">
+                        <Path Width="22" Height="22" Stretch="Uniform" Fill="#FF6363" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Data="M 0,10 L 10,0 L 20,10 L 10,20 Z M 4.5,10 L 10,4.5 L 15.5,10 L 10,15.5 Z" />
+                    </Border>
 
-                    <Border Background="#161922" BorderBrush="#282F3F" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,18">
+                    <TextBlock x:Name="InstallingHeaderTitle"
+                               Text="Installing Beam..."
+                               Foreground="#F9FAFB"
+                               FontSize="17"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,6" />
+
+                    <TextBlock x:Name="InstallingStepLabel"
+                               Text="Preparing files..."
+                               Foreground="#9CA3AF"
+                               FontSize="12.5"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20" />
+
+                    <!-- Sleek Progress Track -->
+                    <Border Width="380"
+                            Height="7"
+                            CornerRadius="3.5"
+                            Background="#191D28"
+                            BorderBrush="#252B3B"
+                            BorderThickness="1"
+                            ClipToBounds="True"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,10">
+                        <Border x:Name="InstallProgressFill"
+                                HorizontalAlignment="Left"
+                                Width="0"
+                                Height="7"
+                                CornerRadius="3.5"
+                                Background="#FF6363" />
+                    </Border>
+
+                    <TextBlock x:Name="InstallPercentText"
+                               Text="0%"
+                               Foreground="#6B7280"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- ========================================================= -->
+                <!-- VIEW 3: READY / COMPLETED VIEW                            -->
+                <!-- ========================================================= -->
+                <StackPanel x:Name="PageComplete" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" Width="420">
+                    <Border Width="48" Height="48" CornerRadius="13" Background="#1A10B981" BorderBrush="#4D10B981" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,14">
+                        <Path Width="20" Height="16" Stretch="Uniform" Stroke="#34D399" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Data="M 2,9 L 7,14 L 18,3" />
+                    </Border>
+
+                    <TextBlock Text="Beam is ready"
+                               Foreground="#F9FAFB"
+                               FontSize="18"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,6" />
+
+                    <TextBlock x:Name="CompleteSummaryText"
+                               Text="Installed and configured in your Windows System Tray."
+                               Foreground="#9CA3AF"
+                               FontSize="12.5"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,18" />
+
+                    <Border Background="#151821" BorderBrush="#232836" BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,0,0,18">
                         <StackPanel>
-                            <TextBlock Text="Quick Keyboard Shortcuts:" Foreground="#FF6363" FontSize="12" FontWeight="Bold" Margin="0,0,0,6" />
-                            <TextBlock Text="• Tap [Windows Key] or press [Alt + Space] → Open / Toggle Beam" Foreground="#E5E7EB" FontSize="12.5" Margin="0,0,0,4" />
-                            <TextBlock Text="• Type 'gemini' or press [Tab] → Open Embedded Google Gemini Chat" Foreground="#E5E7EB" FontSize="12.5" Margin="0,0,0,4" />
-                            <TextBlock Text="• Press [Ctrl + ,] → Open Preferences &amp; Feature Control Center" Foreground="#E5E7EB" FontSize="12.5" />
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="Summon Launcher" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" />
+                                <Border HorizontalAlignment="Right" Background="#1E2330" BorderBrush="#2F374A" BorderThickness="1" CornerRadius="4" Padding="7,2">
+                                    <TextBlock Text="Win Key  or  Alt + Space" Foreground="#F3F4F6" FontSize="11" FontWeight="SemiBold" />
+                                </Border>
+                            </Grid>
+                            <Grid>
+                                <TextBlock Text="Preferences" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" />
+                                <Border HorizontalAlignment="Right" Background="#1E2330" BorderBrush="#2F374A" BorderThickness="1" CornerRadius="4" Padding="7,2">
+                                    <TextBlock Text="Ctrl + ," Foreground="#F3F4F6" FontSize="11" FontWeight="SemiBold" />
+                                </Border>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
                     <CheckBox x:Name="ChkLaunchNow"
-                              Content="Launch Beam now (Start in System Tray &amp; Open Launcher)"
-                              Foreground="#F9FAFB"
-                              FontSize="13.5"
-                              FontWeight="SemiBold"
+                              Style="{StaticResource MinimalCheckBoxStyle}"
+                              Content="Launch Beam now"
+                              HorizontalAlignment="Center"
                               IsChecked="True" />
                 </StackPanel>
             </Grid>
+
+            <!-- Bottom Action Bar -->
+            <Border Grid.Row="2" Background="#0C0E13" BorderBrush="#1C202B" BorderThickness="0,1,0,0" Padding="24,0">
+                <Grid VerticalAlignment="Center">
+                    <TextBlock Text="Noventra Labs" Foreground="#4B5563" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Border x:Name="BtnCancel"
+                                Background="#171B24"
+                                BorderBrush="#282F3E"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="16,7"
+                                Margin="0,0,8,0"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="BtnCancel_Click">
+                            <TextBlock Text="Cancel" Foreground="#9CA3AF" FontSize="12" FontWeight="Medium" />
+                        </Border>
+
+                        <Border x:Name="BtnPrimary"
+                                Background="#FF6363"
+                                CornerRadius="6"
+                                Padding="20,7"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="BtnPrimary_Click">
+                            <TextBlock x:Name="TxtPrimaryBtn" Text="Install Beam" Foreground="#FFFFFF" FontSize="12.5" FontWeight="SemiBold" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
-
-        <!-- Bottom Wizard Navigation Bar -->
-        <Border Grid.Row="1" Background="#0D0F14" BorderBrush="#222734" BorderThickness="0,1,0,0" Padding="20,0">
-            <Grid VerticalAlignment="Center">
-                <TextBlock Text="Noventra Labs Installer Engine v2.3" Foreground="#6B7280" FontSize="11.5" VerticalAlignment="Center" />
-
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="BtnBack"
-                            Content="&lt; Back"
-                            Width="88" Height="32"
-                            Margin="0,0,8,0"
-                            Background="#1E2330"
-                            Foreground="#E5E7EB"
-                            BorderBrush="#32394C"
-                            Cursor="Hand"
-                            Visibility="Collapsed"
-                            Click="BtnBack_Click" />
-
-                    <Button x:Name="BtnNext"
-                            Content="Next &gt;"
-                            Width="104" Height="32"
-                            Margin="0,0,8,0"
-                            Background="#FF6363"
-                            Foreground="#FFFFFF"
-                            FontWeight="SemiBold"
-                            BorderBrush="#FF8080"
-                            Cursor="Hand"
-                            Click="BtnNext_Click" />
-
-                    <Button x:Name="BtnCancel"
-                            Content="Cancel"
-                            Width="84" Height="32"
-                            Background="#1E2330"
-                            Foreground="#9CA3AF"
-                            BorderBrush="#32394C"
-                            Cursor="Hand"
-                            Click="BtnCancel_Click" />
-                </StackPanel>
-            </Grid>
-        </Border>
-    </Grid>
+    </Border>
 </Window>
-

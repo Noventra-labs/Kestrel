@@ -15,6 +15,10 @@
 *.exe
 *.dll
 
+# Git Worktrees
+worktrees/
+.worktrees/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -2,9 +2,11 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Media;
+using System.Windows.Input;
+using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 
@@ -12,6 +14,9 @@ namespace BeamInstaller
 {
     public partial class MainWindow : Window
     {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool DeleteFile(string lpFileName);
+
         private int _currentStep = 1;
         private readonly bool _isUninstallMode;
         private readonly bool _isSilentMode;
@@ -29,11 +34,18 @@ namespace BeamInstaller
             string defaultDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Programs",
-                "Noventra Labs",
                 "Beam");
             TxtInstallDir.Text = defaultDir;
 
             Loaded += MainWindow_Loaded;
+        }
+
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.LeftButton == MouseButtonState.Pressed)
+            {
+                DragMove();
+            }
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -46,26 +58,18 @@ namespace BeamInstaller
 
             if (_isSilentMode)
             {
-                ShowStep(3);
+                ShowStep(2);
                 await PerformInstallationAsync();
-                LaunchInstalledBeam();
+                await LaunchInstalledBeamAsync();
                 Close();
             }
         }
 
-        private void ChkAcceptLicense_Changed(object sender, RoutedEventArgs e)
-        {
-            if (BtnNext != null && _currentStep == 1)
-            {
-                BtnNext.IsEnabled = ChkAcceptLicense.IsChecked == true;
-            }
-        }
-
-        private void BrowseFolder_Click(object sender, RoutedEventArgs e)
+        private void BrowseFolder_Click(object sender, MouseButtonEventArgs e)
         {
             using var dlg = new Forms.FolderBrowserDialog
             {
-                Description = "Select Installation Folder for Beam (Noventra Labs)",
+                Description = "Select Installation Folder for Beam",
                 SelectedPath = TxtInstallDir.Text,
                 ShowNewFolderButton = true
             };
@@ -76,37 +80,30 @@ namespace BeamInstaller
             }
         }
 
-        private void BtnBack_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentStep == 2)
-            {
-                ShowStep(1);
-            }
-        }
-
-        private async void BtnNext_Click(object sender, RoutedEventArgs e)
+        private async void BtnPrimary_Click(object sender, MouseButtonEventArgs e)
         {
             if (_currentStep == 1)
             {
                 ShowStep(2);
-            }
-            else if (_currentStep == 2)
-            {
-                ShowStep(3);
                 await PerformInstallationAsync();
             }
-            else if (_currentStep == 4)
+            else if (_currentStep == 3)
             {
+                BtnPrimary.IsEnabled = false;
+                TxtPrimaryBtn.Text = "Starting...";
+
                 if (ChkLaunchNow.IsChecked == true)
                 {
-                    LaunchInstalledBeam();
+                    await LaunchInstalledBeamAsync();
                 }
+
                 System.Windows.Application.Current.Shutdown();
             }
         }
 
-        private void BtnCancel_Click(object sender, RoutedEventArgs e)
+        private void BtnCancel_Click(object sender, MouseButtonEventArgs e)
         {
+            if (_currentStep == 2) return; // Prevent accidental close mid-extraction
             System.Windows.Application.Current.Shutdown();
         }
 
@@ -114,74 +111,42 @@ namespace BeamInstaller
         {
             _currentStep = step;
 
-            PageWelcome.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
-            PageOptions.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
-            PageInstalling.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
-            PageComplete.Visibility = step == 4 ? Visibility.Visible : Visibility.Collapsed;
-
-            UpdateStepIndicators(step);
+            PageSetup.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
+            PageInstalling.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
+            PageComplete.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
 
             if (step == 1)
             {
-                BtnBack.Visibility = Visibility.Collapsed;
-                BtnNext.Content = "Next >";
-                BtnNext.IsEnabled = ChkAcceptLicense.IsChecked == true;
+                BtnCancel.Visibility = Visibility.Visible;
+                BtnPrimary.Visibility = Visibility.Visible;
+                TxtPrimaryBtn.Text = "Install Beam";
             }
             else if (step == 2)
             {
-                BtnBack.Visibility = Visibility.Visible;
-                BtnNext.Content = "Install";
-                BtnNext.IsEnabled = true;
+                BtnCancel.Visibility = Visibility.Collapsed;
+                BtnPrimary.Visibility = Visibility.Collapsed;
             }
             else if (step == 3)
             {
-                BtnBack.Visibility = Visibility.Collapsed;
-                BtnNext.Visibility = Visibility.Collapsed;
-                BtnCancel.IsEnabled = false;
-            }
-            else if (step == 4)
-            {
-                BtnBack.Visibility = Visibility.Collapsed;
-                BtnNext.Visibility = Visibility.Visible;
-                BtnNext.Content = "Finish";
-                BtnNext.IsEnabled = true;
                 BtnCancel.Visibility = Visibility.Collapsed;
+                BtnPrimary.Visibility = Visibility.Visible;
+                TxtPrimaryBtn.Text = "Done";
             }
         }
 
-        private void UpdateStepIndicators(int activeStep)
-        {
-            var indicators = new[] { StepIndicator1, StepIndicator2, StepIndicator3, StepIndicator4 };
-            var titles = new[]
-            {
-                "1. Welcome & License",
-                "2. Install Options",
-                "3. Installing Files",
-                "4. Finish Setup"
-            };
-
-            for (int i = 0; i < indicators.Length; i++)
-            {
-                int idx = i + 1;
-                string prefix = idx < activeStep ? "✓  " : (idx == activeStep ? "●  " : "○  ");
-                indicators[i].Text = prefix + titles[i];
-                indicators[i].Foreground = idx == activeStep
-                    ? System.Windows.Media.Brushes.White
-                    : (idx < activeStep
-                        ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129))
-                        : new SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128)));
-                indicators[i].FontWeight = idx == activeStep ? FontWeights.SemiBold : FontWeights.Normal;
-            }
-        }
-
-        private void AppendLog(string line, double progress)
+        private void UpdateProgress(string status, int percent)
         {
             Dispatcher.Invoke(() =>
             {
-                InstallingStepLabel.Text = line;
-                InstallProgressBar.Value = progress;
-                InstallLogText.Text += $"[{DateTime.Now:HH:mm:ss}] {line}\n";
-                LogScrollViewer.ScrollToBottom();
+                InstallingStepLabel.Text = status;
+                InstallPercentText.Text = $"{percent}%";
+
+                double targetWidth = 380.0 * (Math.Clamp(percent, 0, 100) / 100.0);
+                var anim = new DoubleAnimation(targetWidth, TimeSpan.FromMilliseconds(220))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                InstallProgressFill.BeginAnimation(WidthProperty, anim);
             });
         }
 
@@ -193,67 +158,56 @@ namespace BeamInstaller
                 installDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "Programs",
-                    "Noventra Labs",
                     "Beam");
             }
 
-            bool createDesktop = OptDesktopShortcut.IsChecked == true;
-            bool createStartMenu = OptStartMenuShortcut.IsChecked == true;
+            bool createShortcuts = OptCreateShortcuts.IsChecked == true;
             bool launchOnBoot = OptLaunchOnBoot.IsChecked == true;
             bool configureHook = OptConfigureWinHook.IsChecked == true;
-            bool registerUninstall = OptRegisterUninstall.IsChecked == true;
 
             await Task.Run(async () =>
             {
                 try
                 {
-                    AppendLog("Stopping any running Beam processes...", 10);
+                    UpdateProgress("Closing active instances...", 15);
                     foreach (var p in Process.GetProcessesByName("Beam"))
                     {
                         try { p.Kill(); p.WaitForExit(1500); } catch { }
                     }
-                    await Task.Delay(250);
+                    await Task.Delay(220);
 
-                    AppendLog($"Creating destination folder: {installDir}", 25);
+                    UpdateProgress("Preparing installation folder...", 35);
                     Directory.CreateDirectory(installDir);
 
                     string targetExe = Path.Combine(installDir, "Beam.exe");
                     string targetIco = Path.Combine(installDir, "beam.ico");
                     _installedExePath = targetExe;
 
-                    AppendLog("Extracting Beam.exe (v2.3.0 — Noventra Labs)...", 45);
+                    UpdateProgress("Extracting application files...", 60);
                     ExtractEmbeddedResource("Payload.Beam.exe", targetExe);
-
-                    AppendLog("Extracting application icon (beam.ico)...", 58);
                     ExtractEmbeddedResource("Payload.beam.ico", targetIco);
 
-                    // Also update legacy %LOCALAPPDATA%\Programs\Beam if present so existing paths stay synced
-                    string legacyDir = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs",
-                        "Beam");
-                    if (!string.Equals(installDir, legacyDir, StringComparison.OrdinalIgnoreCase))
-                    {
-                        try
-                        {
-                            Directory.CreateDirectory(legacyDir);
-                            File.Copy(targetExe, Path.Combine(legacyDir, "Beam.exe"), true);
-                            File.Copy(targetIco, Path.Combine(legacyDir, "beam.ico"), true);
-                        }
-                        catch { }
-                    }
+                    // Unblock Zone.Identifier alternate data stream so Windows never prompts or blocks startup
+                    try { DeleteFile(targetExe + ":Zone.Identifier"); } catch { }
+                    try { DeleteFile(targetIco + ":Zone.Identifier"); } catch { }
 
-                    // Copy uninstaller binary
+                    await Task.Delay(240);
+
                     string uninstallerPath = Path.Combine(installDir, "Uninstall-Beam.exe");
                     var currentInstallerExe = Process.GetCurrentProcess().MainModule?.FileName;
                     if (!string.IsNullOrEmpty(currentInstallerExe) && File.Exists(currentInstallerExe))
                     {
-                        try { File.Copy(currentInstallerExe, uninstallerPath, true); } catch { }
+                        try
+                        {
+                            File.Copy(currentInstallerExe, uninstallerPath, true);
+                            DeleteFile(uninstallerPath + ":Zone.Identifier");
+                        }
+                        catch { }
                     }
 
                     if (configureHook)
                     {
-                        AppendLog("Configuring Windows LowLevelHooksTimeout for 24/7 Start Key Hook...", 70);
+                        UpdateProgress("Configuring global shortcuts...", 75);
                         try
                         {
                             using var deskKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", true);
@@ -262,21 +216,17 @@ namespace BeamInstaller
                         catch { }
                     }
 
-                    if (createDesktop)
+                    if (createShortcuts)
                     {
-                        AppendLog("Creating Desktop shortcut (Beam.lnk)...", 78);
+                        UpdateProgress("Creating Desktop & Start Menu shortcuts...", 85);
                         string deskPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Beam.lnk");
                         ShortcutHelper.CreateShortcut(
                             deskPath,
                             targetExe,
                             installDir,
-                            "Beam — Raycast for Windows by Noventra Labs",
+                            "Beam — Fast Command Bar for Windows",
                             targetIco);
-                    }
 
-                    if (createStartMenu)
-                    {
-                        AppendLog("Creating Start Menu shortcut (Noventra Labs\\Beam.lnk)...", 85);
                         string startPrograms = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
                         string noventraFolder = Path.Combine(startPrograms, "Noventra Labs");
                         Directory.CreateDirectory(noventraFolder);
@@ -285,27 +235,27 @@ namespace BeamInstaller
                             Path.Combine(noventraFolder, "Beam.lnk"),
                             targetExe,
                             installDir,
-                            "Beam — Raycast for Windows by Noventra Labs",
+                            "Beam — Fast Command Bar for Windows",
                             targetIco);
 
                         ShortcutHelper.CreateShortcut(
                             Path.Combine(startPrograms, "Beam.lnk"),
                             targetExe,
                             installDir,
-                            "Beam — Raycast for Windows by Noventra Labs",
+                            "Beam — Fast Command Bar for Windows",
                             targetIco);
                     }
 
                     if (launchOnBoot)
                     {
-                        AppendLog("Registering Beam System Tray Daemon in Windows Startup...", 92);
+                        UpdateProgress("Registering system tray startup...", 93);
                         using var runKey = Registry.CurrentUser.OpenSubKey(RunRegKey, true);
                         runKey?.SetValue("BeamLauncher", $"\"{targetExe}\" --tray", RegistryValueKind.String);
                     }
 
-                    if (registerUninstall)
+                    // Always register clean uninstaller in Windows Installed Apps
+                    try
                     {
-                        AppendLog("Registering Beam (Publisher: Noventra Labs) in Windows Installed Apps...", 97);
                         using var unKey = Registry.CurrentUser.CreateSubKey(UninstallRegKey);
                         if (unKey != null)
                         {
@@ -320,19 +270,19 @@ namespace BeamInstaller
                             unKey.SetValue("NoRepair", 1, RegistryValueKind.DWord);
                         }
                     }
+                    catch { }
 
-                    AppendLog("Installation completed successfully!", 100);
-                    await Task.Delay(350);
+                    UpdateProgress("Installation complete", 100);
+                    await Task.Delay(320);
                 }
                 catch (Exception ex)
                 {
-                    AppendLog($"Error during install: {ex.Message}", 100);
+                    UpdateProgress($"Notice: {ex.Message}", 100);
+                    await Task.Delay(600);
                 }
             });
 
-            CompleteSummaryText.Text =
-                $"Beam v2.3.0 (Published by Noventra Labs) has been installed to:\n{installDir}";
-            ShowStep(4);
+            ShowStep(3);
         }
 
         private static void ExtractEmbeddedResource(string resourceName, string outputPath)
@@ -344,17 +294,21 @@ namespace BeamInstaller
             stream.CopyTo(fs);
         }
 
-        private void LaunchInstalledBeam()
+        private async Task LaunchInstalledBeamAsync()
         {
             try
             {
                 if (!string.IsNullOrEmpty(_installedExePath) && File.Exists(_installedExePath))
                 {
-                    Process.Start(new ProcessStartInfo(_installedExePath, "--replace")
+                    var psi = new ProcessStartInfo
                     {
-                        UseShellExecute = true,
-                        WorkingDirectory = Path.GetDirectoryName(_installedExePath) ?? ""
-                    });
+                        FileName = _installedExePath,
+                        Arguments = "--replace",
+                        WorkingDirectory = Path.GetDirectoryName(_installedExePath) ?? "",
+                        UseShellExecute = false
+                    };
+                    Process.Start(psi);
+                    await Task.Delay(350);
                 }
             }
             catch { }
@@ -363,8 +317,8 @@ namespace BeamInstaller
         private async Task RunUninstallerFlowAsync()
         {
             var confirm = System.Windows.MessageBox.Show(
-                "Are you sure you want to completely uninstall Beam (Noventra Labs) from your computer?",
-                "Uninstall Beam — Noventra Labs",
+                "Uninstall Beam from your computer?",
+                "Uninstall Beam",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
 
@@ -374,19 +328,19 @@ namespace BeamInstaller
                 return;
             }
 
-            ShowStep(3);
+            ShowStep(2);
             InstallingHeaderTitle.Text = "Uninstalling Beam...";
 
             await Task.Run(async () =>
             {
-                AppendLog("Stopping running Beam processes...", 25);
+                UpdateProgress("Stopping active Beam processes...", 30);
                 foreach (var p in Process.GetProcessesByName("Beam"))
                 {
                     try { p.Kill(); p.WaitForExit(1500); } catch { }
                 }
-                await Task.Delay(300);
+                await Task.Delay(250);
 
-                AppendLog("Removing Desktop & Start Menu shortcuts...", 55);
+                UpdateProgress("Removing shortcuts...", 65);
                 try
                 {
                     string deskLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Beam.lnk");
@@ -400,7 +354,7 @@ namespace BeamInstaller
                 }
                 catch { }
 
-                AppendLog("Removing Startup and Installed Apps registry entries...", 85);
+                UpdateProgress("Cleaning registry entries...", 90);
                 try
                 {
                     using var runKey = Registry.CurrentUser.OpenSubKey(RunRegKey, true);
@@ -409,15 +363,10 @@ namespace BeamInstaller
                 }
                 catch { }
 
-                AppendLog("Uninstallation complete!", 100);
+                UpdateProgress("Uninstalled", 100);
                 await Task.Delay(300);
             });
 
-            System.Windows.MessageBox.Show(
-                "Beam has been uninstalled from your computer.",
-                "Beam Uninstaller — Noventra Labs",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
             Close();
         }
     }

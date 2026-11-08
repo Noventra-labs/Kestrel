@@ -521,75 +521,59 @@
             </Grid>
 
             <!-- ========================================================================= -->
-            <!-- LAYER 3: Embedded Google Gemini Chat Suite (WebView2 + Multi-Turn API)    -->
+            <!-- LAYER 3: Embedded Google Gemini Chat Suite                                -->
             <!-- ========================================================================= -->
             <Grid x:Name="AiOverlay"
                   Visibility="Collapsed"
-                  Background="#F814161B">
+                  Background="#F8111318">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="52" />
+                    <RowDefinition Height="48" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="32" />
                 </Grid.RowDefinitions>
 
-                <!-- Top Gemini Header & Mode Switcher -->
-                <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="#252A36" Padding="16,0" Background="#111318">
+                <!-- Minimal Gemini Header -->
+                <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="#1F2430" Padding="18,0" Background="#0E1015">
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <!-- Brand Title -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Path VerticalAlignment="Center" Margin="0,0,10,0" Width="16" Height="16" Stretch="Uniform" Fill="{StaticResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
-                            <TextBlock Text="Google Gemini Chat" Foreground="{StaticResource TextPrimary}" FontSize="14.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <TextBlock x:Name="AiModelTag" Text="(Embedded Web)" Foreground="{StaticResource TextSecondary}" FontSize="11.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <Path VerticalAlignment="Center" Margin="0,0,10,0" Width="14" Height="14" Stretch="Uniform" Fill="{StaticResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
+                            <TextBlock Text="Gemini" Foreground="{StaticResource TextPrimary}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock x:Name="AiModelTag" Text="" Foreground="{StaticResource TextMuted}" FontSize="11.5" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <!-- Center Mode Switcher Pill -->
-                        <Border Grid.Column="1" HorizontalAlignment="Center" Background="#1A1E28" BorderBrush="#2E3546" BorderThickness="1" CornerRadius="7" Padding="3">
-                            <StackPanel Orientation="Horizontal">
-                                <Border x:Name="BtnGeminiWebMode" Background="#FF6363" CornerRadius="5" Padding="10,3" Cursor="Hand" MouseLeftButtonDown="SwitchToGeminiWebMode_Click">
-                                    <TextBlock x:Name="TxtGeminiWebMode" Text="✦ Gemini Web (gemini.google.com)" Foreground="#FFFFFF" FontSize="11.5" FontWeight="SemiBold" />
-                                </Border>
-                                <Border x:Name="BtnGeminiApiMode" Background="Transparent" CornerRadius="5" Padding="10,3" Cursor="Hand" MouseLeftButtonDown="SwitchToGeminiApiMode_Click">
-                                    <TextBlock x:Name="TxtGeminiApiMode" Text="⚡ Fast API Stream" Foreground="#9CA3AF" FontSize="11.5" FontWeight="Medium" />
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
                         <!-- Right Actions -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="#1F2430" BorderBrush="#32394A" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="NewGeminiChat_Click">
-                                <TextBlock Text="↻ New Chat" Foreground="#D1D5DB" FontSize="11.5" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="#181C24" BorderBrush="#262C3A" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0" Cursor="Hand" MouseLeftButtonDown="NewGeminiChat_Click">
+                                <TextBlock Text="New Chat" Foreground="#D1D5DB" FontSize="11.5" FontWeight="Medium" />
                             </Border>
-                            <Border Background="#1F2430" BorderBrush="#32394A" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="OpenGeminiInBrowser_Click">
-                                <TextBlock Text="↗ Browser" Foreground="#D1D5DB" FontSize="11.5" />
-                            </Border>
-                            <Border Background="#242936" BorderBrush="#383F52" BorderThickness="1" CornerRadius="5" Padding="9,3" Cursor="Hand" MouseLeftButtonDown="CloseAiOverlay_Click">
-                                <TextBlock Text="← Back (Esc)" Foreground="#FFFFFF" FontSize="11.5" FontWeight="SemiBold" />
+                            <Border Background="#1E232E" BorderBrush="#2E3646" BorderThickness="1" CornerRadius="6" Padding="10,4" Cursor="Hand" MouseLeftButtonDown="CloseAiOverlay_Click">
+                                <TextBlock Text="Esc" Foreground="#9CA3AF" FontSize="11.5" FontWeight="Medium" />
                             </Border>
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- Body Area: Hosts Either Embedded WebView2 OR Multi-Turn Native API Stream -->
+                <!-- Body Area -->
                 <Grid Grid.Row="1">
-                    <!-- Mode 1: Embedded Google Gemini Web App (Inset by 8px to avoid HWND corner bleed) -->
+                    <!-- Embedded Google Gemini Web App -->
                     <Border x:Name="GeminiWebViewContainer"
                             Visibility="Collapsed"
                             Margin="8,6,8,8"
                             CornerRadius="8"
                             Background="#131314"
-                            BorderBrush="#2A303E"
+                            BorderBrush="#222734"
                             BorderThickness="1">
                         <Grid>
                             <TextBlock x:Name="GeminiWebLoadingText"
-                                       Text="Loading Google Gemini (gemini.google.com)..."
+                                       Text="Loading Gemini..."
                                        Foreground="#9CA3AF"
-                                       FontSize="14"
+                                       FontSize="13"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                             <wv2:WebView2 x:Name="GeminiWebView"
@@ -598,8 +582,8 @@
                         </Grid>
                     </Border>
 
-                    <!-- Mode 2: Multi-Turn Fast API Streaming Chat -->
-                    <Grid x:Name="GeminiApiChatContainer" Visibility="Visible">
+                    <!-- Native AI Streaming View (Used for Clipboard AI Actions) -->
+                    <Grid x:Name="GeminiApiChatContainer" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
@@ -607,21 +591,18 @@
 
                         <ScrollViewer x:Name="ApiChatScrollViewer" Grid.Row="0" Padding="20,14" VerticalScrollBarVisibility="Auto">
                             <StackPanel>
-                                <!-- Dynamic History Thread -->
                                 <StackPanel x:Name="ApiChatHistoryPanel" />
 
-                                <!-- Current Active Exchange -->
-                                <Border Background="#1D212B" BorderBrush="#2F3646" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,12">
-                                    <TextBlock x:Name="AiUserPromptText" Text="Ask Gemini anything below..." Foreground="#E5E7EB" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <Border Background="#171A22" BorderBrush="#252B38" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,10">
+                                    <TextBlock x:Name="AiUserPromptText" Text="Ask anything..." Foreground="#E5E7EB" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
                                 </Border>
-                                <Border Background="#161922" BorderBrush="#262C3A" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,8">
-                                    <TextBlock x:Name="AiResponseText" Text="Type a message below and press Enter to stream from Gemini AI." Foreground="{StaticResource TextPrimary}" FontSize="14" LineHeight="21" TextWrapping="Wrap" />
+                                <Border Background="#13161D" BorderBrush="#1F2430" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,8">
+                                    <TextBlock x:Name="AiResponseText" Text="" Foreground="{StaticResource TextPrimary}" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" />
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
 
-                        <!-- Interactive Multi-Turn Prompt Input Bar -->
-                        <Border Grid.Row="1" Background="#101216" BorderThickness="0,1,0,0" BorderBrush="#252A36" Padding="16,10">
+                        <Border Grid.Row="1" Background="#0E1015" BorderThickness="0,1,0,0" BorderBrush="#1F2430" Padding="16,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -629,22 +610,22 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <Border Grid.Column="0" Background="#1B1F2A" BorderBrush="#343C4F" BorderThickness="1" CornerRadius="7" Padding="10,6" Margin="0,0,8,0">
+                                <Border Grid.Column="0" Background="#161922" BorderBrush="#282F3E" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
                                     <TextBox x:Name="AiPromptInputBox"
                                              Background="Transparent"
                                              BorderThickness="0"
                                              Foreground="#FFFFFF"
                                              CaretBrush="#FF6363"
-                                             FontSize="13.5"
+                                             FontSize="13"
                                              KeyDown="AiPromptInputBox_KeyDown" />
                                 </Border>
 
-                                <Border Grid.Column="1" Background="#FF6363" CornerRadius="7" Padding="14,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SendApiChatPrompt_Click">
-                                    <TextBlock Text="Send ↵" Foreground="#FFFFFF" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Border Grid.Column="1" Background="#FF6363" CornerRadius="6" Padding="14,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SendApiChatPrompt_Click">
+                                    <TextBlock Text="Send" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </Border>
 
-                                <Border Grid.Column="2" Background="#242936" BorderBrush="#383F52" BorderThickness="1" CornerRadius="7" Padding="10,6" Cursor="Hand" MouseLeftButtonDown="CopyAiResponse_Click">
-                                    <TextBlock Text="Copy" Foreground="#E5E7EB" FontSize="12" VerticalAlignment="Center" />
+                                <Border Grid.Column="2" Background="#1C202B" BorderBrush="#2D3446" BorderThickness="1" CornerRadius="6" Padding="10,6" Cursor="Hand" MouseLeftButtonDown="CopyAiResponse_Click">
+                                    <TextBlock Text="Copy" Foreground="#D1D5DB" FontSize="12" VerticalAlignment="Center" />
                                 </Border>
                             </Grid>
                         </Border>
@@ -652,352 +633,357 @@
                 </Grid>
 
                 <!-- Bottom Status Strip -->
-                <Border Grid.Row="2" Background="#0E1014" BorderThickness="0,1,0,0" BorderBrush="#1F232E" Padding="16,5">
-                    <Grid>
-                        <TextBlock x:Name="AiStatusText" Text="✦ Embedded Google Gemini Ready • Press Esc to return to search" Foreground="{StaticResource TextSecondary}" FontSize="11.5" VerticalAlignment="Center" />
-                        <TextBlock Text="Switch between Gemini Web &amp; Fast API anytime in the top bar" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <Border Grid.Row="2" Background="#0C0E12" BorderThickness="0,1,0,0" BorderBrush="#1A1E28" Padding="18,0">
+                    <Grid VerticalAlignment="Center">
+                        <TextBlock x:Name="AiStatusText" Text="Gemini Ready" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" />
+                        <TextBlock Text="Press Esc to return" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
                 </Border>
             </Grid>
 
             <!-- ========================================================================= -->
-            <!-- LAYER 4: Redesigned 4-Tab Raycast Preferences & Settings Center           -->
+            <!-- LAYER 4: Minimal & Premium Preferences Overlay                            -->
             <!-- ========================================================================= -->
             <Grid x:Name="SettingsOverlay"
                   Visibility="Collapsed"
-                  Background="#F814161B">
+                  Background="#FC101217">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="54" />
-                    <RowDefinition Height="42" />
+                    <RowDefinition Height="50" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="46" />
+                    <RowDefinition Height="44" />
                 </Grid.RowDefinitions>
 
-                <!-- Row 0: Settings Title Bar -->
-                <Border Grid.Row="0" Background="#111318" BorderThickness="0,0,0,1" BorderBrush="#232834" Padding="18,0">
+                <!-- Row 0: Unified Header & Minimal Segmented Navigation -->
+                <Border Grid.Row="0" Background="#0D0F14" BorderThickness="0,0,0,1" BorderBrush="#1E222D" Padding="20,0">
                     <Grid VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Path VerticalAlignment="Center" Margin="0,0,10,0" Width="16" Height="16" Stretch="Uniform" Fill="{StaticResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
-                            <TextBlock Text="Beam Preferences &amp; Feature Control Center" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Brand & Title -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path VerticalAlignment="Center" Margin="0,0,9,0" Width="13" Height="13" Stretch="Uniform" Fill="{StaticResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
+                            <TextBlock Text="Preferences" Foreground="#F9FAFB" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
-                        <Border HorizontalAlignment="Right" Background="#242936" BorderBrush="#383F52" BorderThickness="1" CornerRadius="6" Padding="10,4" Cursor="Hand" MouseLeftButtonDown="CloseSettingsOverlay_Click">
-                            <TextBlock Text="← Back to Search (Esc)" Foreground="#FFFFFF" FontSize="11.5" FontWeight="SemiBold" />
+
+                        <!-- Minimal Center Segmented Pill Bar -->
+                        <Border Grid.Column="1" HorizontalAlignment="Center" Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="7" Padding="3">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="SetTabGeneral" Background="#232836" BorderBrush="#333B4F" BorderThickness="1" CornerRadius="5" Padding="14,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="General">
+                                    <TextBlock x:Name="SetTabGeneralTxt" Text="General" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
+                                </Border>
+                                <Border x:Name="SetTabModules" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="5" Padding="14,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Modules">
+                                    <TextBlock x:Name="SetTabModulesTxt" Text="Extensions" Foreground="#9CA3AF" FontSize="12" />
+                                </Border>
+                                <Border x:Name="SetTabAi" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="5" Padding="14,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="AI">
+                                    <TextBlock x:Name="SetTabAiTxt" Text="AI" Foreground="#9CA3AF" FontSize="12" />
+                                </Border>
+                                <Border x:Name="SetTabData" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="5" Padding="14,4" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Data">
+                                    <TextBlock x:Name="SetTabDataTxt" Text="Storage" Foreground="#9CA3AF" FontSize="12" />
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Close Button -->
+                        <Border Grid.Column="2" Background="#181C26" BorderBrush="#282F3F" BorderThickness="1" CornerRadius="6" Padding="10,4" Cursor="Hand" MouseLeftButtonDown="CloseSettingsOverlay_Click">
+                            <TextBlock Text="Esc" Foreground="#9CA3AF" FontSize="11.5" FontWeight="Medium" />
                         </Border>
                     </Grid>
                 </Border>
 
-                <!-- Row 1: 4 Segmented Navigation Tabs -->
-                <Border Grid.Row="1" Background="#14171E" BorderThickness="0,0,0,1" BorderBrush="#232834" Padding="18,0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border x:Name="SetTabGeneral" Background="#282F3D" BorderBrush="#3D475C" BorderThickness="1" CornerRadius="6" Padding="12,4" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="General">
-                            <TextBlock x:Name="SetTabGeneralTxt" Text="⚙ General &amp; Hotkeys" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
-                        </Border>
-                        <Border x:Name="SetTabModules" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="12,4" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Modules">
-                            <TextBlock x:Name="SetTabModulesTxt" Text="🧩 Features &amp; Modules (8)" Foreground="#9CA3AF" FontSize="12" />
-                        </Border>
-                        <Border x:Name="SetTabAi" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="12,4" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="AI">
-                            <TextBlock x:Name="SetTabAiTxt" Text="✦ Gemini &amp; Cloud AI" Foreground="#9CA3AF" FontSize="12" />
-                        </Border>
-                        <Border x:Name="SetTabData" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="12,4" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Data">
-                            <TextBlock x:Name="SetTabDataTxt" Text="🗄 Storage &amp; Index" Foreground="#9CA3AF" FontSize="12" />
-                        </Border>
-                    </StackPanel>
-                </Border>
-
-                <!-- Row 2: Tab Content Area -->
-                <ScrollViewer Grid.Row="2" Padding="20,16" VerticalScrollBarVisibility="Auto">
+                <!-- Row 1: Minimal Tab Content Area -->
+                <ScrollViewer Grid.Row="1" Padding="24,18" VerticalScrollBarVisibility="Auto">
                     <Grid>
-                        <!-- TAB 1: GENERAL & HOTKEYS -->
+                        <!-- TAB 1: GENERAL -->
                         <StackPanel x:Name="SettingsTabGeneralPanel" Visibility="Visible">
-                            <TextBlock Text="KEYBOARD TRIGGERS &amp; SYSTEM TRAY DAEMON" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="SHORTCUTS &amp; STARTUP" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Start Button (Windows Key) Trigger" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Intercept solo Windows Key taps to open Beam while keeping Win+E, Win+R, Win+D working" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Windows Key Trigger" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Open Beam with a solo tap of the Windows key" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkStartKeyTrigger" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Alt + Space Global Hotkey" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Summon or toggle Beam from any desktop application using Alt + Space" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Alt + Space Shortcut" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Summon or dismiss Beam from any application" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkAltSpaceTrigger" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,18">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Launch Automatically on Windows Startup" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Start Beam silently in the System Tray whenever you log into Windows" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Launch at Login" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Start silently in the system tray when Windows starts" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkLaunchStartup" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <TextBlock Text="BEHAVIOR, FOCUS &amp; PERFORMANCE" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="BEHAVIOR" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Auto-Hide When Clicking Outside" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Automatically dismiss Beam to the System Tray when you click another window" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Dismiss on Outside Click" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Automatically hide when focus moves to another window" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkHideOutside" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Floating HUD Toast Notifications" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Display non-activating confirmation pills when copying results or snapping windows" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="HUD Notifications" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Show subtle confirmation pills for actions" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkToastNotifications" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Low-RAM Working Set Memory Trim" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Trim background RAM footprint to ~8–15 MB via Win32 EmptyWorkingSet when hidden" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Low-Memory Background Mode" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Trim working set memory when idle in system tray" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkTrimMemory" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
                         </StackPanel>
 
-                        <!-- TAB 2: FEATURES & MODULES (ENABLE / DISABLE) -->
+                        <!-- TAB 2: EXTENSIONS / MODULES -->
                         <StackPanel x:Name="SettingsTabModulesPanel" Visibility="Collapsed">
-                            <TextBlock Text="ENABLE OR DISABLE BEAM MODULES IN REAL TIME" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="BUILT-IN EXTENSIONS" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="✦ AI &amp; Embedded Google Gemini Chat" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Enable searching 'gemini', Quick AI (Tab) button, and AI clipboard proofreading/summarization" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Gemini AI" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Embedded AI assistant and clipboard writing tools" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableAi" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="🔍 Local File Search Indexer (Ctrl + F)" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Index Desktop, Downloads, Documents, and Projects for instant fuzzy file search" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="File Search" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Instant local file indexing across user folders (Ctrl+F)" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableFileSearch" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="📋 Clipboard History Manager (Ctrl + Shift + V)" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Record copied text items in background and auto-paste into active windows on Enter" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Clipboard History" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Event-driven clipboard history and instant paste (Ctrl+Shift+V)" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableClipboard" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="🪟 Window Management &amp; Snapping (15 Layouts)" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Enable Left/Right Half, Quarters, Thirds, Almost Maximize, Center, and Restore" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Window Management" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="15 desktop snapping layouts with multi-monitor support" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableWindowSnap" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="🧮 Smart Calculator, Units, Currency &amp; Timezones" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Evaluate math expressions, percentages, unit conversions, USD/INR/EUR, and world clocks" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Calculator &amp; Converter" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Inline math expressions, units, currency, and timezones" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableCalculator" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="⚡ Process Killer Manager" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Inspect active Windows processes sorted by RAM usage and terminate unresponsive apps" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Process Manager" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Inspect active processes by memory and terminate unresponsive tasks" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableProcessKiller" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9" Margin="0,0,0,7">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="🛠 System Controls &amp; Developer Generators" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Dark Mode toggle, Audio Mute/Volume, Lock, Sleep, Empty Trash, UUID &amp; Password generators" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="System Commands" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Power controls, audio, dark mode, elevated terminals, and generators" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableSystemCmds" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,9">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="🌐 Web Search Fallbacks (Google, YouTube, GitHub)" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Show quick web search fallback options at the bottom of search results" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Web Search Fallbacks" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Quick web search options for Google, YouTube, and GitHub" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableWebFallbacks" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
                         </StackPanel>
 
-                        <!-- TAB 3: GEMINI & CLOUD AI CONFIGURATION -->
+                        <!-- TAB 3: AI (MINIMAL & PREMIUM — NO PREWRITTEN MODEL NAME, NO FAST MODE) -->
                         <StackPanel x:Name="SettingsTabAiPanel" Visibility="Collapsed">
-                            <TextBlock Text="EMBEDDED GOOGLE GEMINI CHAT MODE" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="PROVIDER &amp; API KEY" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
-                                <Grid>
-                                    <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
-                                        <TextBlock Text="Open Embedded Google Gemini Web (gemini.google.com) by Default" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="When enabled, searching 'gemini' or pressing Tab opens the embedded Gemini WebView2 app" Foreground="#9CA3AF" FontSize="11.5" />
-                                    </StackPanel>
-                                    <CheckBox x:Name="ChkUseEmbeddedGeminiWeb" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
-                                </Grid>
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,14" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <!-- Minimal Provider Selector -->
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="ProviderPillGemini" Grid.Column="0" Background="#232836" BorderBrush="#FF6363" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="gemini">
+                                            <TextBlock x:Name="ProviderPillGeminiTxt" Text="Gemini" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                        </Border>
+                                        <Border x:Name="ProviderPillOpenAi" Grid.Column="1" Background="#12151C" BorderBrush="#222735" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="openai">
+                                            <TextBlock x:Name="ProviderPillOpenAiTxt" Text="OpenAI" Foreground="#9CA3AF" FontSize="12" HorizontalAlignment="Center" />
+                                        </Border>
+                                        <Border x:Name="ProviderPillGroq" Grid.Column="2" Background="#12151C" BorderBrush="#222735" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="groq">
+                                            <TextBlock x:Name="ProviderPillGroqTxt" Text="Groq" Foreground="#9CA3AF" FontSize="12" HorizontalAlignment="Center" />
+                                        </Border>
+                                        <Border x:Name="ProviderPillAnthropic" Grid.Column="3" Background="#12151C" BorderBrush="#222735" BorderThickness="1" CornerRadius="6" Padding="8,6" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="anthropic">
+                                            <TextBlock x:Name="ProviderPillAnthropicTxt" Text="Claude" Foreground="#9CA3AF" FontSize="12" HorizontalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
+
+                                    <TextBlock x:Name="TxtActiveProviderKeyLabel" Text="API Key" Foreground="#9CA3AF" FontSize="11.5" Margin="2,0,0,6" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="TxtApiKeyOverride" Grid.Column="0" Background="#10131A" Foreground="#FFFFFF" CaretBrush="#FF6363" BorderBrush="#282F3E" BorderThickness="1" Padding="10,7" FontSize="12.5" TextChanged="TxtApiKeyOverride_TextChanged" />
+                                        <Border Grid.Column="1" Background="#1F2533" BorderBrush="#31394D" BorderThickness="1" CornerRadius="6" Padding="12,7" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="SaveKeyLocally_Click">
+                                            <TextBlock x:Name="TxtSaveLocalKeyBtn" Text="Save" Foreground="#F3F4F6" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </Border>
+                                        <Border Grid.Column="2" Background="#182D26" BorderBrush="#264A3D" BorderThickness="1" CornerRadius="6" Padding="12,7" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="SaveKeyToSupabase_Click">
+                                            <TextBlock x:Name="TxtSaveVaultBtn" Text="Sync Vault" Foreground="#6EE7B7" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </Border>
+                                        <Border Grid.Column="3" Background="#2A1B20" BorderBrush="#4C2932" BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="ClearProviderKey_Click">
+                                            <TextBlock Text="Clear" Foreground="#FCA5A5" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
                             </Border>
 
-                            <TextBlock Text="GCP CLOUD RUN &amp; FAST API STREAMING CONFIGURATION" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="CONFIGURATION" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <TextBlock Text="Cloud AI Backend URL (GCP Cloud Run URL or http://localhost:8080):" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="2,0,0,5" />
-                            <Grid Margin="0,0,0,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="TxtCloudUrl" Grid.Column="0" Background="#1A1D26" Foreground="#FFFFFF" BorderBrush="#343B4C" BorderThickness="1" Padding="10,6" FontSize="13" />
-                                <Border Grid.Column="1" Background="#252B3B" BorderBrush="#3B445C" BorderThickness="1" CornerRadius="6" Padding="12,6" Margin="8,0,0,0" Cursor="Hand" MouseLeftButtonDown="TestCloudHealth_Click">
-                                    <TextBlock x:Name="TxtTestCloudBtn" Text="Test Connection" Foreground="#E5E7EB" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                </Border>
-                            </Grid>
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,14">
+                                <StackPanel>
+                                    <TextBlock Text="Custom Model ID (Optional)" Foreground="#9CA3AF" FontSize="11.5" Margin="2,0,0,6" />
+                                    <Grid Margin="0,0,0,14">
+                                        <TextBox x:Name="TxtAiModel" Background="#10131A" Foreground="#FFFFFF" CaretBrush="#FF6363" BorderBrush="#282F3E" BorderThickness="1" Padding="10,7" FontSize="12.5" />
+                                        <TextBlock Text="Enter custom model identifier..."
+                                                   Foreground="#4B5563"
+                                                   FontSize="12.5"
+                                                   Padding="12,8"
+                                                   IsHitTestVisible="False">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=TxtAiModel}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
 
-                            <TextBlock Text="Default AI Model (Click a preset chip or type custom model ID):" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="2,0,0,6" />
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Border Background="#232938" BorderBrush="#363F54" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ModelChip_Click" Tag="gemini-2.0-flash">
-                                    <TextBlock Text="gemini-2.0-flash" Foreground="#E5E7EB" FontSize="11.5" />
-                                </Border>
-                                <Border Background="#232938" BorderBrush="#363F54" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ModelChip_Click" Tag="gemini-1.5-pro">
-                                    <TextBlock Text="gemini-1.5-pro" Foreground="#E5E7EB" FontSize="11.5" />
-                                </Border>
-                                <Border Background="#232938" BorderBrush="#363F54" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ModelChip_Click" Tag="gpt-4o">
-                                    <TextBlock Text="gpt-4o" Foreground="#E5E7EB" FontSize="11.5" />
-                                </Border>
-                                <Border Background="#232938" BorderBrush="#363F54" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ModelChip_Click" Tag="llama-3.3-70b-versatile">
-                                    <TextBlock Text="llama-3.3-70b" Foreground="#E5E7EB" FontSize="11.5" />
-                                </Border>
-                                <Border Background="#232938" BorderBrush="#363F54" BorderThickness="1" CornerRadius="5" Padding="8,3" Cursor="Hand" MouseLeftButtonDown="ModelChip_Click" Tag="claude-3-5-sonnet-20241022">
-                                    <TextBlock Text="claude-3.5-sonnet" Foreground="#E5E7EB" FontSize="11.5" />
-                                </Border>
-                            </StackPanel>
-                            <TextBox x:Name="TxtAiModel" Background="#1A1D26" Foreground="#FFFFFF" BorderBrush="#343B4C" BorderThickness="1" Padding="10,6" FontSize="13" Margin="0,0,0,14" />
-
-                            <TextBlock Text="LOCAL &amp; CLOUD API KEY MANAGER (INSERT &amp; SWITCH KEYS LOCALLY ANYTIME)" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,8" />
-
-                            <!-- Provider Switcher Pills (Each provider keeps its own saved local key) -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Border x:Name="ProviderPillGemini" Grid.Column="0" Background="#282F3D" BorderBrush="#4F5D78" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,5,0" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="gemini">
-                                    <TextBlock x:Name="ProviderPillGeminiTxt" Text="✦ Gemini" Foreground="#FFFFFF" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                </Border>
-                                <Border x:Name="ProviderPillOpenAi" Grid.Column="1" Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,5,0" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="openai">
-                                    <TextBlock x:Name="ProviderPillOpenAiTxt" Text="⚡ OpenAI" Foreground="#9CA3AF" FontSize="11.5" HorizontalAlignment="Center" />
-                                </Border>
-                                <Border x:Name="ProviderPillGroq" Grid.Column="2" Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,5,0" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="groq">
-                                    <TextBlock x:Name="ProviderPillGroqTxt" Text="🚀 Groq" Foreground="#9CA3AF" FontSize="11.5" HorizontalAlignment="Center" />
-                                </Border>
-                                <Border x:Name="ProviderPillAnthropic" Grid.Column="3" Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="6" Padding="8,6" Cursor="Hand" MouseLeftButtonDown="ProviderPill_Click" Tag="anthropic">
-                                    <TextBlock x:Name="ProviderPillAnthropicTxt" Text="🧠 Claude" Foreground="#9CA3AF" FontSize="11.5" HorizontalAlignment="Center" />
-                                </Border>
-                            </Grid>
-
-                            <TextBlock x:Name="TxtActiveProviderKeyLabel" Text="Google Gemini API Key (Stored locally on this PC &amp; swappable anytime):" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="2,0,0,5" />
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="TxtApiKeyOverride" Grid.Column="0" Background="#1A1D26" Foreground="#FFFFFF" BorderBrush="#343B4C" BorderThickness="1" Padding="10,6" FontSize="13" TextChanged="TxtApiKeyOverride_TextChanged" />
-                                <Border Grid.Column="1" Background="#252C3D" BorderBrush="#3B455E" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="SaveKeyLocally_Click">
-                                    <TextBlock x:Name="TxtSaveLocalKeyBtn" Text="💾 Save Key Locally" Foreground="#FFFFFF" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                </Border>
-                                <Border Grid.Column="2" Background="#1E3A2F" BorderBrush="#2D5A47" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="SaveKeyToSupabase_Click">
-                                    <TextBlock x:Name="TxtSaveVaultBtn" Text="☁ Sync Supabase" Foreground="#6EE7B7" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                </Border>
-                                <Border Grid.Column="3" Background="#3A2026" BorderBrush="#6E323E" BorderThickness="1" CornerRadius="6" Padding="9,6" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="ClearProviderKey_Click">
-                                    <TextBlock Text="🗑" Foreground="#FCA5A5" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                </Border>
-                            </Grid>
+                                    <TextBlock Text="Cloud Backend Endpoint" Foreground="#9CA3AF" FontSize="11.5" Margin="2,0,0,6" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="TxtCloudUrl" Grid.Column="0" Background="#10131A" Foreground="#FFFFFF" CaretBrush="#FF6363" BorderBrush="#282F3E" BorderThickness="1" Padding="10,7" FontSize="12.5" />
+                                        <Border Grid.Column="1" Background="#1F2533" BorderBrush="#31394D" BorderThickness="1" CornerRadius="6" Padding="14,7" Margin="8,0,0,0" Cursor="Hand" MouseLeftButtonDown="TestCloudHealth_Click">
+                                            <TextBlock x:Name="TxtTestCloudBtn" Text="Test" Foreground="#E5E7EB" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
-                        <!-- TAB 4: STORAGE, CACHE & INDEX MAINTENANCE -->
+                        <!-- TAB 4: STORAGE & INDEX -->
                         <StackPanel x:Name="SettingsTabDataPanel" Visibility="Collapsed">
-                            <TextBlock Text="LIVE INDEX &amp; STORAGE TELEMETRY" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="INDEX SUMMARY" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,0,0,16">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,0,0,18">
                                 <TextBlock x:Name="TxtIndexStats"
                                            Text="Loading index telemetry..."
-                                           Foreground="#E5E7EB"
-                                           FontSize="13"
+                                           Foreground="#D1D5DB"
+                                           FontSize="12.5"
                                            LineHeight="22" />
                             </Border>
 
-                            <TextBlock Text="MAINTENANCE &amp; PRIVACY ACTIONS" Foreground="{StaticResource BrandRed}" FontSize="11" FontWeight="Bold" Margin="2,0,0,10" />
+                            <TextBlock Text="MAINTENANCE" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Rebuild Application &amp; Local File Index" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Rescan Start Menu, Desktop, Downloads, Documents, and Projects immediately" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Rebuild Search Index" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Rescan applications and local user directories" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
-                                    <Border HorizontalAlignment="Right" Background="#252C3D" BorderBrush="#3B455E" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="RebuildIndex_Click">
-                                        <TextBlock Text="↻ Rebuild Index" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
+                                    <Border HorizontalAlignment="Right" Background="#1F2533" BorderBrush="#31394D" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="RebuildIndex_Click">
+                                        <TextBlock Text="Rebuild" Foreground="#F3F4F6" FontSize="11.5" FontWeight="SemiBold" />
                                     </Border>
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Clear Saved Clipboard History" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Remove all stored clipboard entries from memory and %APPDATA%\Beam" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Clear Clipboard History" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Remove all stored clipboard items from memory and disk" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
-                                    <Border HorizontalAlignment="Right" Background="#3A2026" BorderBrush="#6E323E" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="ClearClipboardHistory_Click">
-                                        <TextBlock Text="🗑 Clear Clips" Foreground="#FCA5A5" FontSize="12" FontWeight="SemiBold" />
+                                    <Border HorizontalAlignment="Right" Background="#2A1B20" BorderBrush="#4C2932" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="ClearClipboardHistory_Click">
+                                        <TextBlock Text="Clear" Foreground="#FCA5A5" FontSize="11.5" FontWeight="SemiBold" />
                                     </Border>
                                 </Grid>
                             </Border>
 
-                            <Border Background="#1A1D26" BorderBrush="#2A303E" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Reset Frecency Search Learning" Foreground="#F9FAFB" FontSize="13.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="Reset learned command usage counts and ranking weights to factory defaults" Foreground="#9CA3AF" FontSize="11.5" />
+                                        <TextBlock Text="Reset Search Ranking" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Reset learned command usage weights to defaults" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
-                                    <Border HorizontalAlignment="Right" Background="#252C3D" BorderBrush="#3B455E" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="ResetFrecency_Click">
-                                        <TextBlock Text="↺ Reset Ranking" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
+                                    <Border HorizontalAlignment="Right" Background="#1F2533" BorderBrush="#31394D" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="ResetFrecency_Click">
+                                        <TextBlock Text="Reset" Foreground="#F3F4F6" FontSize="11.5" FontWeight="SemiBold" />
                                     </Border>
                                 </Grid>
                             </Border>
@@ -1005,17 +991,17 @@
                     </Grid>
                 </ScrollViewer>
 
-                <!-- Row 3: Settings Footer Bar -->
-                <Border Grid.Row="3" Background="#101216" BorderThickness="0,1,0,0" BorderBrush="#222631" Padding="18,0">
+                <!-- Row 2: Minimal Footer -->
+                <Border Grid.Row="2" Background="#0D0F14" BorderThickness="0,1,0,0" BorderBrush="#1E222D" Padding="20,0">
                     <Grid VerticalAlignment="Center">
-                        <TextBlock x:Name="SettingsSavedNotice" Text="Beam v2.3.0 • Published by Noventra Labs • All toggles auto-save" Foreground="{StaticResource TextSecondary}" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock x:Name="SettingsSavedNotice" Text="Beam v2.3.0 • Noventra Labs" Foreground="#6B7280" FontSize="11.5" VerticalAlignment="Center" />
                         <Border HorizontalAlignment="Right"
                                 Background="{StaticResource BrandRed}"
                                 CornerRadius="6"
                                 Padding="16,5"
                                 Cursor="Hand"
                                 MouseLeftButtonDown="SaveSettings_Click">
-                            <TextBlock Text="Save &amp; Done" Foreground="#FFFFFF" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="Done" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
                         </Border>
                     </Grid>
                 </Border>

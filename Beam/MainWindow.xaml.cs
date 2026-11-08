@@ -1109,12 +1109,13 @@ namespace Beam
             ChkEnableSystemCmds.IsChecked = _settings.EnableSystemCommands;
             ChkEnableWebFallbacks.IsChecked = _settings.EnableWebFallbacks;
 
-            // Tab 3: Gemini & Multi-Provider Local/Cloud AI
-            ChkUseEmbeddedGeminiWeb.IsChecked = _settings.UseEmbeddedGeminiWeb;
+            // Tab 3: AI Configuration
             TxtCloudUrl.Text = _settings.CloudBackendUrl;
             TxtAiModel.Text = _settings.DefaultAiModel;
 
-            _selectedSettingsProvider = BeamSettings.InferProviderFromModel(_settings.DefaultAiModel);
+            _selectedSettingsProvider = string.IsNullOrWhiteSpace(_settings.ActiveAiProvider)
+                ? "gemini"
+                : _settings.ActiveAiProvider;
             TxtApiKeyOverride.Text = _settings.GetApiKeyForProvider(_selectedSettingsProvider);
             RefreshProviderPillsUi();
 
@@ -1122,7 +1123,7 @@ namespace Beam
             RefreshIndexTelemetryText();
 
             _isLoadingSettingsUi = false;
-            SettingsSavedNotice.Text = "✓ All toggle switches and local API keys apply automatically";
+            SettingsSavedNotice.Text = "Beam v2.3.0 • Noventra Labs";
             SettingsOverlay.Visibility = Visibility.Visible;
         }
 
@@ -1130,10 +1131,10 @@ namespace Beam
         {
             var providers = new[]
             {
-                (Id: "gemini", Border: ProviderPillGemini, Txt: ProviderPillGeminiTxt, Label: "✦ Gemini", Title: "Google Gemini API Key"),
-                (Id: "openai", Border: ProviderPillOpenAi, Txt: ProviderPillOpenAiTxt, Label: "⚡ OpenAI", Title: "OpenAI (GPT-4o) API Key"),
-                (Id: "groq", Border: ProviderPillGroq, Txt: ProviderPillGroqTxt, Label: "🚀 Groq", Title: "Groq (Llama 3.3) API Key"),
-                (Id: "anthropic", Border: ProviderPillAnthropic, Txt: ProviderPillAnthropicTxt, Label: "🧠 Claude", Title: "Anthropic Claude API Key")
+                (Id: "gemini", Border: ProviderPillGemini, Txt: ProviderPillGeminiTxt, Label: "Gemini", Title: "Gemini API Key"),
+                (Id: "openai", Border: ProviderPillOpenAi, Txt: ProviderPillOpenAiTxt, Label: "OpenAI", Title: "OpenAI API Key"),
+                (Id: "groq", Border: ProviderPillGroq, Txt: ProviderPillGroqTxt, Label: "Groq", Title: "Groq API Key"),
+                (Id: "anthropic", Border: ProviderPillAnthropic, Txt: ProviderPillAnthropicTxt, Label: "Claude", Title: "Claude API Key")
             };
 
             foreach (var p in providers)
@@ -1141,15 +1142,15 @@ namespace Beam
                 bool isSelected = string.Equals(_selectedSettingsProvider, p.Id, StringComparison.OrdinalIgnoreCase);
                 bool hasKey = !string.IsNullOrWhiteSpace(_settings.GetApiKeyForProvider(p.Id));
 
-                p.Txt.Text = hasKey ? $"{p.Label} ✓" : p.Label;
+                p.Txt.Text = hasKey ? $"{p.Label} •" : p.Label;
                 p.Border.Background = isSelected
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(40, 47, 61))
-                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(26, 29, 38));
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(35, 40, 54))
+                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(18, 21, 28));
                 p.Border.BorderBrush = isSelected
                     ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 99, 99))
                     : hasKey
                         ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(45, 90, 71))
-                        : new SolidColorBrush(System.Windows.Media.Color.FromRgb(42, 48, 62));
+                        : new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 39, 53));
                 p.Txt.Foreground = isSelected
                     ? System.Windows.Media.Brushes.White
                     : hasKey
@@ -1159,32 +1160,19 @@ namespace Beam
 
                 if (isSelected)
                 {
-                    TxtActiveProviderKeyLabel.Text = $"{p.Title} (Stored locally on this PC — click any provider pill above to switch keys):";
+                    TxtActiveProviderKeyLabel.Text = p.Title;
                 }
             }
         }
 
         private void RefreshIndexTelemetryText()
         {
-            int enabledModules = new[]
-            {
-                _settings.EnableAiFeatures,
-                _settings.EnableFileSearch,
-                _settings.EnableClipboardHistory,
-                _settings.EnableWindowManagement,
-                _settings.EnableCalculator,
-                _settings.EnableProcessKiller,
-                _settings.EnableSystemCommands,
-                _settings.EnableWebFallbacks
-            }.Count(x => x);
-
-            SetTabModulesTxt.Text = $"🧩 Features & Modules ({enabledModules}/8)";
+            SetTabModulesTxt.Text = "Extensions";
             TxtIndexStats.Text =
-                $"• Installed Applications Indexed: {_allApps.Count} apps\n" +
-                $"• Local Files Indexed: {FileSearchService.GetIndexedCount()} files (Desktop, Downloads, Documents, Projects)\n" +
-                $"• Clipboard History Items Saved: {ClipboardService.GetEntryCount()} clips\n" +
-                $"• Learned Frecency Ranking Entries: {SearchEngine.GetTrackedCount()} items\n" +
-                $"• Active Built-in Commands: {_builtInCommands.Count} commands";
+                $"Applications Indexed: {_allApps.Count}\n" +
+                $"Local Files Indexed: {FileSearchService.GetIndexedCount()}\n" +
+                $"Clipboard Entries: {ClipboardService.GetEntryCount()}\n" +
+                $"Learned Ranking Items: {SearchEngine.GetTrackedCount()}";
         }
 
         private void SettingsTab_Click(object sender, MouseButtonEventArgs e)
@@ -1202,10 +1190,10 @@ namespace Beam
             {
                 bool active = string.Equals(tabBorders[i].Tag as string, tabName, StringComparison.OrdinalIgnoreCase);
                 tabBorders[i].Background = active
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(40, 47, 61))
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(35, 40, 54))
                     : System.Windows.Media.Brushes.Transparent;
                 tabBorders[i].BorderBrush = active
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(61, 71, 92))
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(51, 59, 79))
                     : System.Windows.Media.Brushes.Transparent;
                 tabTexts[i].Foreground = active
                     ? System.Windows.Media.Brushes.White
@@ -1231,7 +1219,7 @@ namespace Beam
             ApplyUiToSettings();
             _settings.Save(notify: true);
             RefreshIndexTelemetryText();
-            SettingsSavedNotice.Text = $"✓ Saved & applied at {DateTime.Now:HH:mm:ss}";
+            SettingsSavedNotice.Text = "Saved";
         }
 
         private void ApplyUiToSettings()
@@ -1252,9 +1240,8 @@ namespace Beam
             _settings.EnableSystemCommands = ChkEnableSystemCmds.IsChecked == true;
             _settings.EnableWebFallbacks = ChkEnableWebFallbacks.IsChecked == true;
 
-            _settings.UseEmbeddedGeminiWeb = ChkUseEmbeddedGeminiWeb.IsChecked == true;
             _settings.CloudBackendUrl = string.IsNullOrWhiteSpace(TxtCloudUrl.Text) ? "http://localhost:8080" : TxtCloudUrl.Text.Trim();
-            _settings.DefaultAiModel = string.IsNullOrWhiteSpace(TxtAiModel.Text) ? "gemini-2.0-flash" : TxtAiModel.Text.Trim();
+            _settings.DefaultAiModel = TxtAiModel.Text.Trim();
             _settings.ActiveAiProvider = _selectedSettingsProvider;
             _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Text.Trim());
         }
@@ -1263,7 +1250,6 @@ namespace Beam
         {
             if (sender is not Border pill || pill.Tag is not string providerId) return;
 
-            // Save current provider's typed key before switching
             if (!_isLoadingSettingsUi)
             {
                 _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Text.Trim());
@@ -1273,29 +1259,15 @@ namespace Beam
             _selectedSettingsProvider = providerId;
             _settings.ActiveAiProvider = providerId;
 
-            // Automatically switch default model if it doesn't match the newly selected provider
-            var currentInferred = BeamSettings.InferProviderFromModel(TxtAiModel.Text);
-            if (!string.Equals(currentInferred, providerId, StringComparison.OrdinalIgnoreCase))
-            {
-                TxtAiModel.Text = providerId switch
-                {
-                    "openai" => "gpt-4o",
-                    "groq" => "llama-3.3-70b-versatile",
-                    "anthropic" => "claude-3-5-sonnet-20241022",
-                    _ => "gemini-2.0-flash"
-                };
-                _settings.DefaultAiModel = TxtAiModel.Text;
-            }
-
             TxtApiKeyOverride.Text = _settings.GetApiKeyForProvider(providerId);
             _settings.UserApiKeyOverride = TxtApiKeyOverride.Text;
             _isLoadingSettingsUi = false;
 
             _settings.Save(notify: true);
             RefreshProviderPillsUi();
-            TxtSaveLocalKeyBtn.Text = "💾 Save Key Locally";
-            TxtSaveVaultBtn.Text = "☁ Sync Supabase";
-            SettingsSavedNotice.Text = $"✓ Switched active provider to '{providerId.ToUpperInvariant()}' (Model: {TxtAiModel.Text})";
+            TxtSaveLocalKeyBtn.Text = "Save";
+            TxtSaveVaultBtn.Text = "Sync Vault";
+            SettingsSavedNotice.Text = $"Active provider: {providerId.ToUpperInvariant()}";
         }
 
         private void TxtApiKeyOverride_TextChanged(object sender, TextChangedEventArgs e)
@@ -1312,13 +1284,13 @@ namespace Beam
             RefreshProviderPillsUi();
 
             bool hasKey = !string.IsNullOrWhiteSpace(TxtApiKeyOverride.Text);
-            TxtSaveLocalKeyBtn.Text = hasKey ? "✓ Saved Locally!" : "💾 Save Key Locally";
+            TxtSaveLocalKeyBtn.Text = hasKey ? "Saved" : "Save";
             SettingsSavedNotice.Text = hasKey
-                ? $"✓ Saved '{_selectedSettingsProvider.ToUpperInvariant()}' API key locally on this PC (%APPDATA%\\Beam\\settings.json)"
-                : $"⚠ Paste an API key for '{_selectedSettingsProvider.ToUpperInvariant()}' first";
+                ? $"Saved {_selectedSettingsProvider.ToUpperInvariant()} key locally"
+                : "Enter an API key first";
             if (hasKey)
             {
-                ToastNotification.Show($"✓ Saved {_selectedSettingsProvider.ToUpperInvariant()} Key Locally");
+                ToastNotification.Show($"✓ Saved {_selectedSettingsProvider.ToUpperInvariant()} Key");
             }
         }
 
@@ -1331,29 +1303,9 @@ namespace Beam
             _settings.SetApiKeyForProvider(_selectedSettingsProvider, string.Empty);
             _settings.Save(notify: true);
             RefreshProviderPillsUi();
-            TxtSaveLocalKeyBtn.Text = "💾 Save Key Locally";
-            SettingsSavedNotice.Text = $"✓ Cleared local API key for '{_selectedSettingsProvider.ToUpperInvariant()}'";
-            ToastNotification.Show($"✓ Cleared {_selectedSettingsProvider.ToUpperInvariant()} API Key");
-        }
-
-        private void ModelChip_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (sender is Border chip && chip.Tag is string modelId)
-            {
-                // Save current key before switching model/provider
-                _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Text.Trim());
-
-                _isLoadingSettingsUi = true;
-                TxtAiModel.Text = modelId;
-                _selectedSettingsProvider = BeamSettings.InferProviderFromModel(modelId);
-                TxtApiKeyOverride.Text = _settings.GetApiKeyForProvider(_selectedSettingsProvider);
-                _isLoadingSettingsUi = false;
-
-                ApplyUiToSettings();
-                _settings.Save(notify: true);
-                RefreshProviderPillsUi();
-                SettingsSavedNotice.Text = $"✓ Default AI Model set to {modelId} (Loaded saved {_selectedSettingsProvider.ToUpperInvariant()} key)";
-            }
+            TxtSaveLocalKeyBtn.Text = "Save";
+            SettingsSavedNotice.Text = $"Cleared {_selectedSettingsProvider.ToUpperInvariant()} key";
+            ToastNotification.Show($"✓ Cleared {_selectedSettingsProvider.ToUpperInvariant()} Key");
         }
 
         private async void TestCloudHealth_Click(object sender, MouseButtonEventArgs e)
@@ -1361,12 +1313,12 @@ namespace Beam
             ApplyUiToSettings();
             _settings.Save(notify: true);
 
-            TxtTestCloudBtn.Text = "Checking...";
+            TxtTestCloudBtn.Text = "...";
             bool ok = await AiClient.CheckBackendHealthAsync(_settings.CloudBackendUrl);
-            TxtTestCloudBtn.Text = ok ? "✓ Online!" : "✗ Offline";
+            TxtTestCloudBtn.Text = ok ? "Online" : "Offline";
             SettingsSavedNotice.Text = ok
-                ? $"✓ Connected to Beam Cloud AI at {_settings.CloudBackendUrl}"
-                : $"⚠ Cloud Backend offline — Beam will use your Local API Keys directly!";
+                ? "Connected to Cloud AI Backend"
+                : "Cloud Backend unreachable — using local API keys";
         }
 
         private async void SaveKeyToSupabase_Click(object sender, MouseButtonEventArgs e)
@@ -1378,7 +1330,7 @@ namespace Beam
             var key = _settings.GetApiKeyForProvider(_selectedSettingsProvider);
             if (string.IsNullOrWhiteSpace(key))
             {
-                SettingsSavedNotice.Text = $"⚠ Paste a {_selectedSettingsProvider.ToUpperInvariant()} API key before syncing.";
+                SettingsSavedNotice.Text = "Enter an API key before syncing";
                 return;
             }
 
@@ -1388,9 +1340,9 @@ namespace Beam
                 _selectedSettingsProvider,
                 key);
 
-            TxtSaveVaultBtn.Text = ok ? "✓ Synced!" : "☁ Sync Supabase";
-            SettingsSavedNotice.Text = $"✓ {msg}";
-            ToastNotification.Show(ok ? "✓ Key Encrypted in Supabase Vault" : $"✓ Saved {_selectedSettingsProvider.ToUpperInvariant()} Key Locally");
+            TxtSaveVaultBtn.Text = ok ? "Synced" : "Sync Vault";
+            SettingsSavedNotice.Text = msg;
+            ToastNotification.Show(ok ? "✓ Encrypted in Supabase Vault" : $"✓ Saved {_selectedSettingsProvider.ToUpperInvariant()} Key Locally");
         }
 
         private void RebuildIndex_Click(object sender, MouseButtonEventArgs e)
@@ -1491,21 +1443,11 @@ namespace Beam
 
         #endregion
 
-        #region Embedded Google Gemini Chat (WebView2 + Multi-Turn Fast API Stream)
+        #region Embedded Google Gemini Chat
 
         private void QuickAiBadge_Click(object sender, MouseButtonEventArgs e)
         {
-            OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, SearchBox.Text.Trim());
-        }
-
-        private void SwitchToGeminiWebMode_Click(object sender, MouseButtonEventArgs e)
-        {
-            SetGeminiOverlayMode(useWebMode: true, initialPrompt: "");
-        }
-
-        private void SwitchToGeminiApiMode_Click(object sender, MouseButtonEventArgs e)
-        {
-            SetGeminiOverlayMode(useWebMode: false, initialPrompt: "");
+            OpenGeminiChatOverlay(true, SearchBox.Text.Trim());
         }
 
         private void NewGeminiChat_Click(object sender, MouseButtonEventArgs e)
@@ -1520,17 +1462,11 @@ namespace Beam
             else
             {
                 ApiChatHistoryPanel.Children.Clear();
-                AiUserPromptText.Text = "New Conversation Started";
-                AiResponseText.Text = "Type a message below and press Enter to stream from Gemini AI.";
+                AiUserPromptText.Text = "Ask anything...";
+                AiResponseText.Text = "";
                 AiPromptInputBox.Text = "";
                 AiPromptInputBox.Focus();
             }
-        }
-
-        private void OpenGeminiInBrowser_Click(object sender, MouseButtonEventArgs e)
-        {
-            HideAndTrim(false);
-            AppScanner.LaunchFile("https://gemini.google.com/app");
         }
 
         private void OpenGeminiChatOverlay(bool useWebMode, string promptInput)
@@ -1555,7 +1491,6 @@ namespace Beam
                 cleanedPrompt = cleanedPrompt[7..].Trim();
             }
 
-            // If a specific prompt was passed (e.g. Summarize Clipboard or "Ask Gemini ..."), use API mode if configured or copy prompt to clipboard for Web mode
             SetGeminiOverlayMode(useWebMode, cleanedPrompt);
         }
 
@@ -1563,33 +1498,17 @@ namespace Beam
         {
             _isGeminiWebModeActive = useWebMode;
 
-            // Update Mode Switcher Pill Visuals
-            BtnGeminiWebMode.Background = useWebMode
-                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 99, 99))
-                : System.Windows.Media.Brushes.Transparent;
-            TxtGeminiWebMode.Foreground = useWebMode
-                ? System.Windows.Media.Brushes.White
-                : new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175));
-
-            BtnGeminiApiMode.Background = !useWebMode
-                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 99, 99))
-                : System.Windows.Media.Brushes.Transparent;
-            TxtGeminiApiMode.Foreground = !useWebMode
-                ? System.Windows.Media.Brushes.White
-                : new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175));
-
             if (useWebMode)
             {
-                // Mode 1: Embedded Google Gemini Web (gemini.google.com/app)
                 GeminiApiChatContainer.Visibility = Visibility.Collapsed;
                 GeminiWebViewContainer.Visibility = Visibility.Visible;
-                AiModelTag.Text = "(gemini.google.com)";
-                AiStatusText.Text = "✦ Embedded Google Gemini Web • Press Esc anytime to return to Beam search";
+                AiModelTag.Text = "";
+                AiStatusText.Text = "Gemini Ready";
 
                 if (!string.IsNullOrWhiteSpace(initialPrompt))
                 {
                     System.Windows.Clipboard.SetText(initialPrompt);
-                    ToastNotification.Show("✓ Prompt copied! Press Ctrl+V inside Gemini Chat");
+                    ToastNotification.Show("✓ Prompt copied — press Ctrl+V in Gemini");
                 }
 
                 await EnsureGeminiWebViewInitializedAsync();
@@ -1598,13 +1517,11 @@ namespace Beam
             }
             else
             {
-                // Mode 2: Multi-Turn Fast API Streaming Chat
-                // Strictly collapse WebView2 HWND so it never captures mouse/keyboard or GPU resources
                 GeminiWebView.Visibility = Visibility.Collapsed;
                 GeminiWebViewContainer.Visibility = Visibility.Collapsed;
                 GeminiApiChatContainer.Visibility = Visibility.Visible;
 
-                AiModelTag.Text = $"({_settings.DefaultAiModel})";
+                AiModelTag.Text = string.IsNullOrWhiteSpace(_settings.DefaultAiModel) ? "" : _settings.DefaultAiModel;
                 AiPromptInputBox.Focus();
                 Keyboard.Focus(AiPromptInputBox);
 

@@ -66,37 +66,13 @@ namespace Beam.Services
                 {
                     Id = "cmd:gemini_chat",
                     Name = "Gemini Chat",
-                    Subtitle = "Open Embedded Google Gemini AI Chat inside Beam",
+                    Subtitle = "Open Google Gemini AI inside Beam",
                     Category = "AI Command",
                     Section = "Commands",
                     ShortcutBadge = "Tab",
                     Icon = iconAi,
                     KeepOpenOnExecute = true,
-                    Action = () => openGeminiChat(BeamSettings.Current.UseEmbeddedGeminiWeb, "")
-                });
-
-                commands.Add(new LauncherItem
-                {
-                    Id = "cmd:gemini_web",
-                    Name = "Google Gemini Web (Embedded)",
-                    Subtitle = "Interactive gemini.google.com chat embedded directly inside Beam",
-                    Category = "AI Command",
-                    Section = "Commands",
-                    Icon = iconAi,
-                    KeepOpenOnExecute = true,
                     Action = () => openGeminiChat(true, "")
-                });
-
-                commands.Add(new LauncherItem
-                {
-                    Id = "cmd:gemini_api",
-                    Name = "Gemini Fast API Chat",
-                    Subtitle = "Multi-turn streaming chat via Gemini 2.0 Flash / Cloud Run",
-                    Category = "AI Command",
-                    Section = "Commands",
-                    Icon = iconAi,
-                    KeepOpenOnExecute = true,
-                    Action = () => openGeminiChat(false, "")
                 });
 
                 commands.Add(new LauncherItem

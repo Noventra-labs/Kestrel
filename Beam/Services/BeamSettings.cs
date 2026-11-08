@@ -30,7 +30,7 @@ namespace Beam.Services
         // 3. Gemini & Multi-Provider Local + Cloud AI Configuration
         public bool UseEmbeddedGeminiWeb { get; set; } = true;
         public string CloudBackendUrl { get; set; } = "https://beam-cloud-ai-77889729488.asia-south1.run.app";
-        public string DefaultAiModel { get; set; } = "gemini-2.0-flash";
+        public string DefaultAiModel { get; set; } = "";
         public string ActiveAiProvider { get; set; } = "gemini";
         public string UserApiKeyOverride { get; set; } = "";
 
@@ -60,6 +60,8 @@ namespace Beam.Services
         public static string InferProviderFromModel(string? model)
         {
             var m = (model ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(m))
+                return Current?.ActiveAiProvider ?? "gemini";
             if (m.StartsWith("gpt") || m.StartsWith("o1") || m.StartsWith("o3") || m.Contains("openai"))
                 return "openai";
             if (m.StartsWith("claude") || m.Contains("anthropic"))
@@ -139,6 +141,11 @@ namespace Beam.Services
                     var settings = JsonSerializer.Deserialize<BeamSettings>(json);
                     if (settings != null)
                     {
+                        if (string.Equals(settings.DefaultAiModel, "gemini-2.0-flash", StringComparison.OrdinalIgnoreCase))
+                        {
+                            settings.DefaultAiModel = "";
+                        }
+
                         // Migrate legacy single key into provider-specific slot if empty
                         if (!string.IsNullOrWhiteSpace(settings.UserApiKeyOverride))
                         {
