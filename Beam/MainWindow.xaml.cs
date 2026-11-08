@@ -237,7 +237,7 @@ namespace Beam
 
                 var menu = new Forms.ContextMenuStrip();
 
-                var openItem = new Forms.ToolStripMenuItem("Open Beam (Start Key / Alt + Space)");
+                var openItem = new Forms.ToolStripMenuItem("Open Kestrel (Start Key / Alt + Space)");
                 openItem.Font = new System.Drawing.Font(openItem.Font, System.Drawing.FontStyle.Bold);
                 openItem.Click += (s, e) => Dispatcher.Invoke(Summon);
 
@@ -256,7 +256,7 @@ namespace Beam
                 var settingsItem = new Forms.ToolStripMenuItem("Preferences & Settings (Ctrl + ,)");
                 settingsItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenSettingsOverlay(); });
 
-                var exitItem = new Forms.ToolStripMenuItem("Exit Beam Completely");
+                var exitItem = new Forms.ToolStripMenuItem("Exit Kestrel Completely");
                 exitItem.Click += (s, e) => Dispatcher.Invoke(() =>
                 {
                     CloseForReal();
@@ -276,7 +276,7 @@ namespace Beam
                 {
                     Icon = icon,
                     ContextMenuStrip = menu,
-                    Text = "Beam Launcher — Active (Press Win Key or Alt+Space)",
+                    Text = "Kestrel Launcher — Active (Press Win Key or Alt+Space)",
                     Visible = true
                 };
 
@@ -359,7 +359,7 @@ namespace Beam
             if (showFirstTimeHint && !_shownTrayHintOnce)
             {
                 _shownTrayHintOnce = true;
-                ToastNotification.Show("Beam is active in System Tray • Press Windows Key or Alt+Space anytime");
+                ToastNotification.Show("Kestrel is active in System Tray • Press Windows Key or Alt+Space anytime");
             }
 
             if (_settings.TrimMemoryOnHide)
@@ -1083,7 +1083,7 @@ namespace Beam
 
             actions.Add(new ActionItem
             {
-                Title = "Beam Preferences & Settings",
+                Title = "Kestrel Preferences & Settings",
                 ShortcutHint = "Ctrl+,",
                 Icon = iconGear,
                 Execute = OpenSettingsOverlay
@@ -1170,7 +1170,7 @@ namespace Beam
             RefreshIndexTelemetryText();
 
             _isLoadingSettingsUi = false;
-            SettingsSavedNotice.Text = "Beam v2.3.0 • Noventra Labs";
+            SettingsSavedNotice.Text = "Kestrel v2.3.0 • Noventra Labs";
             SettingsOverlay.Visibility = Visibility.Visible;
         }
 
@@ -1434,7 +1434,7 @@ namespace Beam
         private void SaveSettings_Click(object sender, MouseButtonEventArgs e)
         {
             CloseSettingsOverlay();
-            ToastNotification.Show("✓ Beam Preferences Saved");
+            ToastNotification.Show("✓ Kestrel Preferences Saved");
         }
 
         #endregion
@@ -1589,7 +1589,7 @@ namespace Beam
                 GeminiWebLoadingText.Text = "Initializing Embedded Google Gemini (WebView2)...";
                 string profileDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Beam",
+                    "Kestrel",
                     "WebView2Profile");
 
                 Directory.CreateDirectory(profileDir);

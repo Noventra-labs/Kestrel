@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>Beam-Setup</AssemblyName>
+    <AssemblyName>Kestrel-Setup</AssemblyName>
     <RootNamespace>BeamInstaller</RootNamespace>
     <ApplicationIcon>..\Beam\beam.ico</ApplicationIcon>
     <Version>2.3.0</Version>
@@ -15,17 +15,16 @@
     <AssemblyVersion>2.3.0.0</AssemblyVersion>
     <Company>Noventra Labs</Company>
     <Authors>Noventra Labs</Authors>
-    <Product>Beam Setup Wizard</Product>
-    <AssemblyTitle>Beam Setup — Noventra Labs</AssemblyTitle>
+    <Product>Kestrel Setup Wizard</Product>
+    <AssemblyTitle>Kestrel Setup — Noventra Labs</AssemblyTitle>
     <Copyright>Copyright © 2026 Noventra Labs. All rights reserved.</Copyright>
-    <Description>Official Standalone Windows Installer for Beam by Noventra Labs</Description>
+    <Description>Official Standalone Windows Installer for Kestrel by Noventra Labs</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="..\Beam\beam.ico" Link="beam.ico" />
-    <EmbeddedResource Include="..\Beam\publish\Beam.exe" LogicalName="Payload.Beam.exe" />
+    <EmbeddedResource Include="..\Beam\publish\Kestrel.exe" LogicalName="Payload.Kestrel.exe" />
     <EmbeddedResource Include="..\Beam\beam.ico" LogicalName="Payload.beam.ico" />
   </ItemGroup>
 
 </Project>
-

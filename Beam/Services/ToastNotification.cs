@@ -115,7 +115,7 @@ namespace Beam.Services
 
             _toastWindow = new Window
             {
-                Title = "BeamToast",
+                Title = "KestrelToast",
                 WindowStyle = WindowStyle.None,
                 AllowsTransparency = true,
                 Background = System.Windows.Media.Brushes.Transparent,

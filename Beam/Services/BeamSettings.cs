@@ -52,6 +52,10 @@ namespace Beam.Services
 
         private static readonly string SettingsFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Kestrel");
+
+        private static readonly string LegacySettingsFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Beam");
 
         private static readonly string SettingsFile = Path.Combine(SettingsFolder, "settings.json");
@@ -139,9 +143,19 @@ namespace Beam.Services
         {
             try
             {
-                if (File.Exists(SettingsFile))
+                string targetFile = SettingsFile;
+                if (!File.Exists(targetFile))
                 {
-                    var json = File.ReadAllText(SettingsFile);
+                    string legacyFile = Path.Combine(LegacySettingsFolder, "settings.json");
+                    if (File.Exists(legacyFile))
+                    {
+                        targetFile = legacyFile;
+                    }
+                }
+
+                if (File.Exists(targetFile))
+                {
+                    var json = File.ReadAllText(targetFile);
                     var settings = JsonSerializer.Deserialize<BeamSettings>(json);
                     if (settings != null)
                     {
@@ -206,13 +220,17 @@ namespace Beam.Services
                 if (enable)
                 {
                     var exePath = Process.GetCurrentProcess().MainModule?.FileName;
-                    if (!string.IsNullOrWhiteSpace(exePath) && exePath.EndsWith("Beam.exe", StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrWhiteSpace(exePath) &&
+                        (exePath.EndsWith("Kestrel.exe", StringComparison.OrdinalIgnoreCase) ||
+                         exePath.EndsWith("Beam.exe", StringComparison.OrdinalIgnoreCase)))
                     {
-                        key.SetValue("BeamLauncher", $"\"{exePath}\" --tray");
+                        key.SetValue("KestrelLauncher", $"\"{exePath}\" --tray");
+                        key.DeleteValue("BeamLauncher", false);
                     }
                 }
                 else
                 {
+                    key.DeleteValue("KestrelLauncher", false);
                     key.DeleteValue("BeamLauncher", false);
                 }
             }

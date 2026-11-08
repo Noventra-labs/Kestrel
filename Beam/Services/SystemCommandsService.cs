@@ -66,7 +66,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:gemini_chat",
                     Name = "Gemini Chat",
-                    Subtitle = "Open Google Gemini AI inside Beam",
+                    Subtitle = "Open Google Gemini AI inside Kestrel",
                     Category = "AI Command",
                     Section = "Commands",
                     ShortcutBadge = "Tab",
@@ -375,7 +375,7 @@ namespace Beam.Services
             commands.Add(new LauncherItem
             {
                 Id = "cmd:settings",
-                Name = "Beam Preferences & Settings",
+                Name = "Kestrel Preferences & Settings",
                 Subtitle = "Enable/disable File Search, AI, Window Snap, Hotkeys & Cloud AI",
                 Category = "Preferences",
                 Section = "Commands",
@@ -732,7 +732,7 @@ namespace Beam.Services
                 {
                     Id = "web:gemini",
                     Name = $"Ask Gemini AI \"{query}\"",
-                    Subtitle = "Open Embedded Gemini Chat inside Beam",
+                    Subtitle = "Open Embedded Gemini Chat inside Kestrel",
                     Category = "Gemini AI",
                     ShortcutBadge = "Tab",
                     Icon = iconAi,

@@ -21,6 +21,11 @@ namespace Beam.Services
 
         private static readonly string FrecencyFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Kestrel",
+            "frecency.json");
+
+        private static readonly string LegacyFrecencyFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Beam",
             "frecency.json");
 
@@ -199,9 +204,13 @@ namespace Beam.Services
         {
             try
             {
-                if (File.Exists(FrecencyFile))
-                    {
-                    var json = File.ReadAllText(FrecencyFile);
+                string target = File.Exists(FrecencyFile)
+                    ? FrecencyFile
+                    : (File.Exists(LegacyFrecencyFile) ? LegacyFrecencyFile : string.Empty);
+
+                if (!string.IsNullOrEmpty(target))
+                {
+                    var json = File.ReadAllText(target);
                     var dict = JsonSerializer.Deserialize<Dictionary<string, UsageRecord>>(json);
                     if (dict != null)
                     {

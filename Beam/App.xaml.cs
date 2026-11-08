@@ -24,13 +24,13 @@ namespace Beam
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         private const int HWND_BROADCAST = 0xffff;
-        public static readonly int WmBeamSummon = RegisterWindowMessage("BEAM_LAUNCHER_SUMMON_MSG");
+        public static readonly int WmBeamSummon = RegisterWindowMessage("KESTREL_LAUNCHER_SUMMON_MSG");
 
         private MainWindow? _mainWindow;
         private static readonly string LogFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Beam",
-            "beam.log");
+            "Kestrel",
+            "kestrel.log");
 
         public static void Log(string msg)
         {
@@ -47,7 +47,7 @@ namespace Beam
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            Log("Beam v2.3 process starting...");
+            Log("Kestrel v2.3 process starting...");
 
             bool forceReplace = e.Args.Any(a => a.Equals("--replace", StringComparison.OrdinalIgnoreCase));
             bool startInTray = e.Args.Any(a => a.Equals("--tray", StringComparison.OrdinalIgnoreCase));
@@ -72,12 +72,12 @@ namespace Beam
 
                     if (summonedOk)
                     {
-                        Log("Existing Beam instance summoned to foreground. Exiting duplicate launch.");
+                        Log("Existing Kestrel instance summoned to foreground. Exiting duplicate launch.");
                         Shutdown();
                         return;
                     }
 
-                    Log("Existing Beam instance did not respond on interactive desktop; replacing it.");
+                    Log("Existing Kestrel instance did not respond on interactive desktop; replacing it.");
                 }
 
                 foreach (var old in others)
