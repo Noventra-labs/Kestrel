@@ -1188,7 +1188,7 @@ namespace Beam
             RefreshIndexTelemetryText();
 
             _isLoadingSettingsUi = false;
-            SettingsSavedNotice.Text = "Kestrel v2.3.0 • Noventra Labs";
+            SettingsSavedNotice.Text = "Kestrel v2.3.1 • Noventra Labs";
             SettingsOverlay.Visibility = Visibility.Visible;
         }
 

@@ -10,9 +10,9 @@
     <AssemblyName>Kestrel-Setup</AssemblyName>
     <RootNamespace>BeamInstaller</RootNamespace>
     <ApplicationIcon>..\Beam\beam.ico</ApplicationIcon>
-    <Version>2.3.0</Version>
-    <FileVersion>2.3.0.0</FileVersion>
-    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <Version>2.3.1</Version>
+    <FileVersion>2.3.1.0</FileVersion>
+    <AssemblyVersion>2.3.1.0</AssemblyVersion>
     <Company>Noventra Labs</Company>
     <Authors>Noventra Labs</Authors>
     <Product>Kestrel Setup Wizard</Product>
