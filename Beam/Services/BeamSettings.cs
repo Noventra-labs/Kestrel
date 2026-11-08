@@ -15,7 +15,7 @@ namespace Beam.Services
         public bool LaunchOnStartup { get; set; } = true;
         public bool HideOnClickOutside { get; set; } = true;
         public bool EnableToastNotifications { get; set; } = true;
-        public bool TrimMemoryOnHide { get; set; } = true;
+        public bool TrimMemoryOnHide { get; set; } = false;
 
         // 2. Modules & Extensions (Live Enable / Disable)
         public bool EnableAiFeatures { get; set; } = true;

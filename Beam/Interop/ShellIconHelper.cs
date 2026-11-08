@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -10,6 +12,52 @@ using System.Windows.Media.Imaging;
 
 namespace Beam.Interop
 {
+    internal static class StaWorker
+    {
+        private static readonly BlockingCollection<Action> _queue = new();
+
+        static StaWorker()
+        {
+            var thread = new Thread(ProcessQueue)
+            {
+                IsBackground = true,
+                Name = "Kestrel.StaIconWorker"
+            };
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+        }
+
+        private static void ProcessQueue()
+        {
+            foreach (var action in _queue.GetConsumingEnumerable())
+            {
+                try { action(); } catch { }
+            }
+        }
+
+        public static T Run<T>(Func<T> func)
+        {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                return func();
+            }
+
+            var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _queue.Add(() =>
+            {
+                try
+                {
+                    tcs.SetResult(func());
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            });
+            return tcs.Task.GetAwaiter().GetResult();
+        }
+    }
+
     public static class ShellIconHelper
     {
         private static readonly ConcurrentDictionary<string, ImageSource> IconCache = new(StringComparer.OrdinalIgnoreCase);
@@ -62,7 +110,7 @@ namespace Beam.Interop
         private const uint SHGFI_SYSICONINDEX = 0x000004000;
         private const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
         private const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
-        private const int SHIL_EXTRALARGE = 0x02; // 48x48 high-DPI shell icon
+        private const int SHIL_LARGE = 0x00; // 32x32 crisp shell icon (perfect match for 26px list items)
         private const int ILD_TRANSPARENT = 0x00000001;
 
         public static ImageSource GetFastFileIcon(string path, string extension)
@@ -78,6 +126,25 @@ namespace Beam.Interop
 
             try
             {
+                var extracted = StaWorker.Run(() => ExtractExtensionIconInternal(ext));
+                if (extracted != null)
+                {
+                    ExtensionCache[ext] = extracted;
+                    return extracted;
+                }
+            }
+            catch { }
+
+            // Fallback to standard path-based extractor
+            var standard = GetIcon(path);
+            ExtensionCache[ext] = standard;
+            return standard;
+        }
+
+        private static ImageSource? ExtractExtensionIconInternal(string ext)
+        {
+            try
+            {
                 var shinfo = new SHFILEINFO();
                 var res = SHGetFileInfo(
                     ext,
@@ -89,23 +156,22 @@ namespace Beam.Interop
                 if (res != IntPtr.Zero && shinfo.iIcon > 0)
                 {
                     var iidImageList = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
-                    if (SHGetImageList(SHIL_EXTRALARGE, ref iidImageList, out var imgList) == 0 && imgList != null)
+                    if (SHGetImageList(SHIL_LARGE, ref iidImageList, out var imgList) == 0 && imgList != null)
                     {
-                        if (imgList.GetIcon(shinfo.iIcon, ILD_TRANSPARENT, out var hIcon48) == 0 && hIcon48 != IntPtr.Zero)
+                        if (imgList.GetIcon(shinfo.iIcon, ILD_TRANSPARENT, out var hIcon32) == 0 && hIcon32 != IntPtr.Zero)
                         {
                             try
                             {
                                 var bs = Imaging.CreateBitmapSourceFromHIcon(
-                                    hIcon48,
+                                    hIcon32,
                                     Int32Rect.Empty,
                                     BitmapSizeOptions.FromEmptyOptions());
                                 bs.Freeze();
-                                ExtensionCache[ext] = bs;
                                 return bs;
                             }
                             finally
                             {
-                                DestroyIcon(hIcon48);
+                                DestroyIcon(hIcon32);
                             }
                         }
                     }
@@ -113,10 +179,7 @@ namespace Beam.Interop
             }
             catch { }
 
-            // Fallback to standard path-based extractor
-            var standard = GetIcon(path);
-            ExtensionCache[ext] = standard;
-            return standard;
+            return null;
         }
 
         public static ImageSource GetIcon(string path)
@@ -138,20 +201,32 @@ namespace Beam.Interop
         {
             try
             {
-                // 1. Try 48x48 Extra-Large High-DPI Icon via SHGetImageList
+                return StaWorker.Run(() => ExtractHighDpiIconInternal(path));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static ImageSource? ExtractHighDpiIconInternal(string path)
+        {
+            try
+            {
+                // 1. Try 32x32 Large Icon via SHGetImageList
                 var shinfo = new SHFILEINFO();
                 var res = SHGetFileInfo(path, 0, ref shinfo, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_SYSICONINDEX);
                 if (res != IntPtr.Zero && shinfo.iIcon > 0)
                 {
                     var iidImageList = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
-                    if (SHGetImageList(SHIL_EXTRALARGE, ref iidImageList, out var imgList) == 0 && imgList != null)
+                    if (SHGetImageList(SHIL_LARGE, ref iidImageList, out var imgList) == 0 && imgList != null)
                     {
-                        if (imgList.GetIcon(shinfo.iIcon, ILD_TRANSPARENT, out var hIcon48) == 0 && hIcon48 != IntPtr.Zero)
+                        if (imgList.GetIcon(shinfo.iIcon, ILD_TRANSPARENT, out var hIcon32) == 0 && hIcon32 != IntPtr.Zero)
                         {
                             try
                             {
                                 var bs = Imaging.CreateBitmapSourceFromHIcon(
-                                    hIcon48,
+                                    hIcon32,
                                     Int32Rect.Empty,
                                     BitmapSizeOptions.FromEmptyOptions());
                                 bs.Freeze();
@@ -159,7 +234,7 @@ namespace Beam.Interop
                             }
                             finally
                             {
-                                DestroyIcon(hIcon48);
+                                DestroyIcon(hIcon32);
                             }
                         }
                     }

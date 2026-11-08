@@ -119,10 +119,33 @@ namespace Beam.Interop
         public const int DWMSBT_TRANSIENTWINDOW = 3;  // Acrylic (Frosted Glass)
         public const int DWMSBT_TABBEDWINDOW = 4;     // Mica Alt
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MARGINS
+        {
+            public int cxLeftWidth;
+            public int cxRightWidth;
+            public int cyTopHeight;
+            public int cyBottomHeight;
+
+            public MARGINS(int left, int right, int top, int bottom)
+            {
+                cxLeftWidth = left;
+                cxRightWidth = right;
+                cyTopHeight = top;
+                cyBottomHeight = bottom;
+            }
+        }
+
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
+
         public static void EnableAcrylic(IntPtr hwnd)
         {
             try
             {
+                var margins = new MARGINS(-1, -1, -1, -1);
+                DwmExtendFrameIntoClientArea(hwnd, ref margins);
+
                 int darkMode = 1;
                 DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
 

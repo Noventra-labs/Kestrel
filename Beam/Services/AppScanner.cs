@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using Beam.Interop;
@@ -9,9 +11,21 @@ using Beam.Models;
 
 namespace Beam.Services
 {
+    public class CachedAppRecord
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Path { get; set; } = string.Empty;
+        public string Subtitle { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+    }
+
     public static class AppScanner
     {
         private static readonly List<FileSystemWatcher> Watchers = new();
+        private static readonly string CacheFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Kestrel",
+            "app-index.json");
 
         public static void StartWatchingChanges(Action onAppsChanged)
         {
@@ -43,9 +57,24 @@ namespace Beam.Services
             }
         }
 
-        public static List<LauncherItem> ScanApps()
+        public static List<LauncherItem> ScanApps(bool allowCache = true)
         {
+            if (allowCache && File.Exists(CacheFile))
+            {
+                try
+                {
+                    var json = File.ReadAllText(CacheFile);
+                    var cached = JsonSerializer.Deserialize<List<CachedAppRecord>>(json);
+                    if (cached != null && cached.Count > 0)
+                    {
+                        return ReconstructFromCache(cached);
+                    }
+                }
+                catch { }
+            }
+
             var list = new List<LauncherItem>();
+            var cacheRecords = new List<CachedAppRecord>();
             var scannedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var foldersToScan = new List<string>
@@ -74,6 +103,14 @@ namespace Beam.Services
                             var icon = ShellIconHelper.GetIcon(file);
                             var displayPath = Path.GetDirectoryName(file) ?? file;
 
+                            cacheRecords.Add(new CachedAppRecord
+                            {
+                                Name = fileName,
+                                Path = file,
+                                Subtitle = displayPath,
+                                Category = "Application"
+                            });
+
                             list.Add(new LauncherItem
                             {
                                 Id = "app:" + fileName.ToLowerInvariant(),
@@ -91,6 +128,57 @@ namespace Beam.Services
                 catch { }
             }
 
+            // Persist app index cache asynchronously
+            Task.Run(() =>
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(CacheFile);
+                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                        Directory.CreateDirectory(dir);
+                    var json = JsonSerializer.Serialize(cacheRecords);
+                    File.WriteAllText(CacheFile, json);
+                }
+                catch { }
+            });
+
+            AppendSystemTools(list, scannedNames);
+            list.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return list;
+        }
+
+        private static List<LauncherItem> ReconstructFromCache(List<CachedAppRecord> records)
+        {
+            var list = new List<LauncherItem>(records.Count + 20);
+            var scannedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var r in records)
+            {
+                if (!File.Exists(r.Path)) continue;
+                if (!scannedNames.Add(r.Name)) continue;
+
+                var icon = ShellIconHelper.GetIcon(r.Path);
+                string pathCopy = r.Path;
+                list.Add(new LauncherItem
+                {
+                    Id = "app:" + r.Name.ToLowerInvariant(),
+                    Name = r.Name,
+                    Subtitle = r.Subtitle,
+                    Category = r.Category,
+                    Icon = icon,
+                    Path = pathCopy,
+                    IsAdminCapable = true,
+                    Action = () => LaunchFile(pathCopy)
+                });
+            }
+
+            AppendSystemTools(list, scannedNames);
+            list.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return list;
+        }
+
+        private static void AppendSystemTools(List<LauncherItem> list, HashSet<string> scannedNames)
+        {
             var defaultSysIcon = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathGear);
             var defaultTermIcon = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathTerminal);
 
@@ -165,9 +253,6 @@ namespace Beam.Services
                     });
                 }
             }
-
-            list.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-            return list;
         }
 
         public static void LaunchFile(string path)
@@ -182,7 +267,7 @@ namespace Beam.Services
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show("Failed to launch: " + ex.Message, "Beam", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show("Failed to launch: " + ex.Message, "Kestrel", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -199,7 +284,7 @@ namespace Beam.Services
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show("Failed to launch as Administrator: " + ex.Message, "Beam", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show("Failed to launch as Administrator: " + ex.Message, "Kestrel", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

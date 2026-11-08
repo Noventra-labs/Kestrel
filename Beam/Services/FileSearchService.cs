@@ -124,29 +124,55 @@ namespace Beam.Services
 
         public static List<LauncherItem> SearchFiles(string query, int maxResults = 35)
         {
-            var list = new List<LauncherItem>();
+            var list = new List<LauncherItem>(maxResults);
             var snapshot = _indexedFiles;
 
-            IEnumerable<IndexedFileEntry> matches;
             if (string.IsNullOrWhiteSpace(query))
             {
-                matches = snapshot.Take(maxResults);
-            }
-            else
-            {
-                var q = query.Trim();
-                var lowerQuery = q.ToLowerInvariant();
-                matches = snapshot
-                    .Select(f => new { File = f, Score = SearchEngine.ComputeFuzzyScoreFast(f.Name, f.LowerName, f.Acronym, q, lowerQuery) })
-                    .Where(x => x.Score > 0)
-                    .OrderByDescending(x => x.Score)
-                    .ThenByDescending(x => x.File.LastWrite)
-                    .Take(maxResults)
-                    .Select(x => x.File);
+                int count = Math.Min(maxResults, snapshot.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    var f = snapshot[i];
+                    string pathCopy = f.FullPath;
+                    list.Add(new LauncherItem
+                    {
+                        Id = "file:" + pathCopy,
+                        Name = f.Name,
+                        Subtitle = f.Directory,
+                        Category = string.IsNullOrEmpty(f.Extension) ? "File" : f.Extension.TrimStart('.').ToUpperInvariant() + " File",
+                        ShortcutBadge = "Open ↵",
+                        Icon = ShellIconHelper.GetFastFileIcon(pathCopy, f.Extension),
+                        Path = pathCopy,
+                        Action = () => AppScanner.LaunchFile(pathCopy)
+                    });
+                }
+                return list;
             }
 
-            foreach (var f in matches)
+            var q = query.Trim();
+            var lowerQuery = q.ToLowerInvariant();
+            var matches = new List<(IndexedFileEntry File, double Score)>(Math.Min(128, snapshot.Count));
+
+            for (int i = 0; i < snapshot.Count; i++)
             {
+                var f = snapshot[i];
+                double score = SearchEngine.ComputeFuzzyScoreFast(f.Name, f.LowerName, f.Acronym, q, lowerQuery);
+                if (score > 0)
+                {
+                    matches.Add((f, score));
+                }
+            }
+
+            matches.Sort((a, b) =>
+            {
+                int cmp = b.Score.CompareTo(a.Score);
+                return cmp != 0 ? cmp : b.File.LastWrite.CompareTo(a.File.LastWrite);
+            });
+
+            int resultCount = Math.Min(maxResults, matches.Count);
+            for (int i = 0; i < resultCount; i++)
+            {
+                var f = matches[i].File;
                 string pathCopy = f.FullPath;
                 list.Add(new LauncherItem
                 {

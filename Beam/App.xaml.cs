@@ -26,6 +26,7 @@ namespace Beam
         private const int HWND_BROADCAST = 0xffff;
         public static readonly int WmBeamSummon = RegisterWindowMessage("KESTREL_LAUNCHER_SUMMON_MSG");
 
+        private static Mutex? _singleInstanceMutex;
         private MainWindow? _mainWindow;
         private static readonly string LogFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -52,37 +53,28 @@ namespace Beam
             bool forceReplace = e.Args.Any(a => a.Equals("--replace", StringComparison.OrdinalIgnoreCase));
             bool startInTray = e.Args.Any(a => a.Equals("--tray", StringComparison.OrdinalIgnoreCase));
 
-            var current = Process.GetCurrentProcess();
-            var others = Process.GetProcessesByName(current.ProcessName)
-                .Where(p => p.Id != current.Id)
-                .ToList();
+            const string mutexName = @"Local\Kestrel.Launcher.SingleInstance";
+            _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
 
-            if (others.Count > 0)
+            if (!createdNew && !forceReplace)
             {
-                if (!forceReplace)
-                {
-                    // Try summoning the existing instance first
-                    PostMessage((IntPtr)HWND_BROADCAST, (uint)WmBeamSummon, IntPtr.Zero, IntPtr.Zero);
-                    Thread.Sleep(180);
+                // Instant notification to existing instance without scanning all processes or sleeping
+                PostMessage((IntPtr)HWND_BROADCAST, (uint)WmBeamSummon, IntPtr.Zero, IntPtr.Zero);
+                Log("Existing Kestrel instance summoned. Fast exiting duplicate launch.");
+                Shutdown();
+                return;
+            }
 
-                    // Verify if the existing instance actually came to the foreground on the interactive desktop
-                    IntPtr fg = GetForegroundWindow();
-                    GetWindowThreadProcessId(fg, out uint fgPid);
-                    bool summonedOk = others.Any(p => (uint)p.Id == fgPid);
-
-                    if (summonedOk)
-                    {
-                        Log("Existing Kestrel instance summoned to foreground. Exiting duplicate launch.");
-                        Shutdown();
-                        return;
-                    }
-
-                    Log("Existing Kestrel instance did not respond on interactive desktop; replacing it.");
-                }
-
+            if (forceReplace && !createdNew)
+            {
+                var current = Process.GetCurrentProcess();
+                var others = Process.GetProcessesByName(current.ProcessName)
+                    .Where(p => p.Id != current.Id)
+                    .ToList();
                 foreach (var old in others)
                 {
                     try { old.Kill(); old.WaitForExit(1500); } catch { }
+                    finally { old.Dispose(); }
                 }
             }
 
@@ -126,7 +118,14 @@ namespace Beam
 
         protected override void OnExit(ExitEventArgs e)
         {
-            Log("Beam exiting cleanly.");
+            Log("Kestrel exiting cleanly.");
+            try
+            {
+                _singleInstanceMutex?.ReleaseMutex();
+                _singleInstanceMutex?.Dispose();
+                _singleInstanceMutex = null;
+            }
+            catch { }
             base.OnExit(e);
         }
     }

@@ -20,11 +20,20 @@ namespace Beam.Services
         private static readonly List<ClipboardEntry> Entries = new();
         private static string _lastText = string.Empty;
         private static IntPtr _registeredHwnd = IntPtr.Zero;
+        private const int MaxEntryCharacters = 65536; // 64 KB cap per clip
 
         private static readonly string HistoryFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Kestrel",
+            "clipboard_history.json");
+
+        private static readonly string LegacyHistoryFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Beam",
             "clipboard_history.json");
+
+        private static CancellationTokenSource? _saveDebounceCts;
+        private static readonly object _saveLock = new();
 
         public static void InitializeEventDrivenListener(IntPtr hwnd)
         {
@@ -41,6 +50,7 @@ namespace Beam.Services
                 DwmApi.RemoveClipboardFormatListener(_registeredHwnd);
                 _registeredHwnd = IntPtr.Zero;
             }
+            SaveHistoryDirect();
         }
 
         public static void OnClipboardUpdated()
@@ -69,6 +79,11 @@ namespace Beam.Services
             var trimmed = text.Trim();
             if (string.IsNullOrEmpty(trimmed)) return;
 
+            if (trimmed.Length > MaxEntryCharacters)
+            {
+                trimmed = trimmed[..MaxEntryCharacters] + "\n...[truncated: clip exceeds 64KB]";
+            }
+
             var existing = Entries.FirstOrDefault(x => x.Text == trimmed);
             bool wasPinned = existing?.IsPinned ?? false;
 
@@ -85,14 +100,14 @@ namespace Beam.Services
             Entries.Clear();
             Entries.AddRange(sorted.Take(60));
 
-            SaveHistory();
+            ScheduleSaveHistory();
         }
 
         public static void ClearHistory()
         {
             Entries.Clear();
             _lastText = string.Empty;
-            SaveHistory();
+            SaveHistoryDirect();
         }
 
         public static int GetEntryCount() => Entries.Count;
@@ -161,9 +176,15 @@ namespace Beam.Services
         {
             try
             {
-                if (File.Exists(HistoryFile))
+                string targetFile = HistoryFile;
+                if (!File.Exists(targetFile) && File.Exists(LegacyHistoryFile))
                 {
-                    var json = File.ReadAllText(HistoryFile);
+                    targetFile = LegacyHistoryFile;
+                }
+
+                if (File.Exists(targetFile))
+                {
+                    var json = File.ReadAllText(targetFile);
                     var loaded = JsonSerializer.Deserialize<List<ClipboardEntry>>(json);
                     if (loaded != null)
                     {
@@ -171,12 +192,36 @@ namespace Beam.Services
                         Entries.AddRange(loaded);
                         if (Entries.Count > 0) _lastText = Entries[0].Text;
                     }
+
+                    // If loaded from legacy, persist to new Kestrel path
+                    if (targetFile == LegacyHistoryFile)
+                    {
+                        SaveHistoryDirect();
+                    }
                 }
             }
             catch { }
         }
 
-        private static void SaveHistory()
+        private static void ScheduleSaveHistory()
+        {
+            lock (_saveLock)
+            {
+                _saveDebounceCts?.Cancel();
+                _saveDebounceCts = new CancellationTokenSource();
+                var token = _saveDebounceCts.Token;
+
+                Task.Delay(800, token).ContinueWith(t =>
+                {
+                    if (!t.IsCanceled)
+                    {
+                        SaveHistoryDirect();
+                    }
+                }, TaskScheduler.Default);
+            }
+        }
+
+        private static void SaveHistoryDirect()
         {
             try
             {
@@ -184,7 +229,13 @@ namespace Beam.Services
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-                var json = JsonSerializer.Serialize(Entries);
+                List<ClipboardEntry> snapshot;
+                lock (Entries)
+                {
+                    snapshot = new List<ClipboardEntry>(Entries);
+                }
+
+                var json = JsonSerializer.Serialize(snapshot);
                 File.WriteAllText(HistoryFile, json);
             }
             catch { }

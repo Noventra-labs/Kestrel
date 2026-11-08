@@ -73,12 +73,21 @@ namespace Beam.Services
         {
             if (string.IsNullOrWhiteSpace(query))
             {
-                return pool
-                    .Select((item, idx) => new { Item = item, Score = GetFrecencyBoost(item.Id) - idx * 0.05 })
-                    .OrderByDescending(x => x.Score)
-                    .Take(maxResults)
-                    .Select(x => x.Item)
-                    .ToList();
+                var list = pool as IList<LauncherItem> ?? pool.ToList();
+                var scoredEmpty = new List<(LauncherItem Item, double Score)>(list.Count);
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var item = list[i];
+                    scoredEmpty.Add((item, GetFrecencyBoost(item.Id) - i * 0.05));
+                }
+                scoredEmpty.Sort((a, b) => b.Score.CompareTo(a.Score));
+                int count = Math.Min(maxResults, scoredEmpty.Count);
+                var results = new List<LauncherItem>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    results.Add(scoredEmpty[i].Item);
+                }
+                return results;
             }
 
             var q = query.Trim();
@@ -99,12 +108,19 @@ namespace Beam.Services
                 }
             }
 
-            return scored
-                .OrderByDescending(x => x.Score)
-                .ThenBy(x => x.Item.Name.Length)
-                .Take(maxResults)
-                .Select(x => x.Item)
-                .ToList();
+            scored.Sort((a, b) =>
+            {
+                int cmp = b.Score.CompareTo(a.Score);
+                return cmp != 0 ? cmp : a.Item.Name.Length.CompareTo(b.Item.Name.Length);
+            });
+
+            int resultCount = Math.Min(maxResults, scored.Count);
+            var ranked = new List<LauncherItem>(resultCount);
+            for (int i = 0; i < resultCount; i++)
+            {
+                ranked.Add(scored[i].Item);
+            }
+            return ranked;
         }
 
         public static double ComputeFuzzyScoreFast(string target, string lowerTarget, string acronym, string query, string lowerQuery)

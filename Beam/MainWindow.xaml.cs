@@ -44,6 +44,8 @@ namespace Beam
         private bool _shownTrayHintOnce = false;
         private bool _isLoadingSettingsUi = false;
         private bool _webViewInitialized = false;
+        private Microsoft.Web.WebView2.Wpf.WebView2? GeminiWebView;
+        private DispatcherTimer? _webViewTeardownTimer;
         private bool _isGeminiWebModeActive = true;
         private DateTime _ignoreDeactivateUntil = DateTime.MinValue;
         private CancellationTokenSource? _aiCts;
@@ -67,6 +69,10 @@ namespace Beam
             GlobalKeyboardHook.BeamWindowHandle = helper.Handle;
 
             _source = HwndSource.FromHwnd(helper.Handle);
+            if (_source?.CompositionTarget != null)
+            {
+                _source.CompositionTarget.BackgroundColor = System.Windows.Media.Colors.Transparent;
+            }
             _source?.AddHook(HwndHook);
 
             // Enable Windows 11 DWM Acrylic blur & hardware-accelerated rounded corners (DWMWCP_ROUND)
@@ -330,6 +336,7 @@ namespace Beam
             SystemEvents.PowerModeChanged -= OnSystemPowerOrSessionChanged;
             SystemEvents.SessionSwitch -= OnSystemPowerOrSessionChanged;
             ClipboardService.ShutdownListener();
+            TeardownWebView2();
             _notifyIcon?.Dispose();
             _keyboardHook?.Dispose();
             _source?.RemoveHook(HwndHook);
@@ -339,6 +346,7 @@ namespace Beam
         {
             _isRealClose = true;
             _watchdogTimer?.Stop();
+            TeardownWebView2();
             ClipboardService.ShutdownListener();
             _notifyIcon?.Dispose();
             _keyboardHook?.Dispose();
@@ -350,7 +358,12 @@ namespace Beam
             if (!IsVisible) return;
 
             // Always collapse WebView2 HWND before hiding so it never holds GPU/hit-test resources
-            GeminiWebView.Visibility = Visibility.Collapsed;
+            if (GeminiWebView != null)
+            {
+                GeminiWebView.Visibility = Visibility.Collapsed;
+                try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
+                StartWebViewTeardownTimer();
+            }
             GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
 
@@ -1131,7 +1144,12 @@ namespace Beam
         private void OpenSettingsOverlay()
         {
             // Ensure WebView2 is collapsed while viewing Settings so its native HWND doesn't overlap
-            GeminiWebView.Visibility = Visibility.Collapsed;
+            if (GeminiWebView != null)
+            {
+                GeminiWebView.Visibility = Visibility.Collapsed;
+                try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
+                StartWebViewTeardownTimer();
+            }
             GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
 
@@ -1501,7 +1519,7 @@ namespace Beam
         {
             if (_isGeminiWebModeActive)
             {
-                if (_webViewInitialized && GeminiWebView.CoreWebView2 != null)
+                if (_webViewInitialized && GeminiWebView?.CoreWebView2 != null)
                 {
                     GeminiWebView.CoreWebView2.Navigate("https://gemini.google.com/app");
                 }
@@ -1547,6 +1565,7 @@ namespace Beam
 
             if (useWebMode)
             {
+                _webViewTeardownTimer?.Stop();
                 GeminiApiChatContainer.Visibility = Visibility.Collapsed;
                 GeminiWebViewContainer.Visibility = Visibility.Visible;
                 AiModelTag.Text = "";
@@ -1559,12 +1578,21 @@ namespace Beam
                 }
 
                 await EnsureGeminiWebViewInitializedAsync();
-                GeminiWebView.Visibility = Visibility.Visible;
-                GeminiWebView.Focus();
+                if (GeminiWebView != null)
+                {
+                    try { GeminiWebView.CoreWebView2?.Resume(); } catch { }
+                    GeminiWebView.Visibility = Visibility.Visible;
+                    GeminiWebView.Focus();
+                }
             }
             else
             {
-                GeminiWebView.Visibility = Visibility.Collapsed;
+                if (GeminiWebView != null)
+                {
+                    GeminiWebView.Visibility = Visibility.Collapsed;
+                    try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
+                    StartWebViewTeardownTimer();
+                }
                 GeminiWebViewContainer.Visibility = Visibility.Collapsed;
                 GeminiApiChatContainer.Visibility = Visibility.Visible;
 
@@ -1579,14 +1607,63 @@ namespace Beam
             }
         }
 
+        private void StartWebViewTeardownTimer()
+        {
+            _webViewTeardownTimer?.Stop();
+            _webViewTeardownTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(60)
+            };
+            _webViewTeardownTimer.Tick += (s, e) =>
+            {
+                _webViewTeardownTimer?.Stop();
+                TeardownWebView2();
+            };
+            _webViewTeardownTimer.Start();
+        }
+
+        private void TeardownWebView2()
+        {
+            _webViewTeardownTimer?.Stop();
+            _webViewTeardownTimer = null;
+            if (GeminiWebView != null)
+            {
+                try
+                {
+                    GeminiWebHostGrid.Children.Remove(GeminiWebView);
+                    GeminiWebView.Dispose();
+                }
+                catch { }
+                GeminiWebView = null;
+                _webViewInitialized = false;
+                App.Log("WebView2 idle teardown: disposed and memory freed.");
+            }
+        }
+
         private async Task EnsureGeminiWebViewInitializedAsync()
         {
-            if (_webViewInitialized && GeminiWebView.CoreWebView2 != null)
+            _webViewTeardownTimer?.Stop();
+            if (_webViewInitialized && GeminiWebView?.CoreWebView2 != null)
+            {
+                GeminiWebLoadingText.Visibility = Visibility.Collapsed;
                 return;
+            }
 
             try
             {
+                GeminiWebLoadingText.Visibility = Visibility.Visible;
                 GeminiWebLoadingText.Text = "Initializing Embedded Google Gemini (WebView2)...";
+
+                if (GeminiWebView == null)
+                {
+                    GeminiWebView = new Microsoft.Web.WebView2.Wpf.WebView2
+                    {
+                        Margin = new Thickness(2),
+                        Visibility = Visibility.Collapsed
+                    };
+                    GeminiWebHostGrid.Children.Add(GeminiWebView);
+                }
+
                 string profileDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "Kestrel",
@@ -1761,7 +1838,12 @@ namespace Beam
         {
             _aiCts?.Cancel();
             // Strictly collapse WebView2 HWND so it never blocks WPF airspace
-            GeminiWebView.Visibility = Visibility.Collapsed;
+            if (GeminiWebView != null)
+            {
+                GeminiWebView.Visibility = Visibility.Collapsed;
+                try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
+                StartWebViewTeardownTimer();
+            }
             GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
             SearchBox.Focus();

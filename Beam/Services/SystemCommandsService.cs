@@ -649,6 +649,19 @@ namespace Beam.Services
             return commands;
         }
 
+        private record struct ProcessEntry(int Id, string Name, string Title, long MemMb);
+        private static List<ProcessEntry>? _processSnapshot;
+        private static DateTime _lastProcessSnapshotTime = DateTime.MinValue;
+        private static readonly object _processSnapshotLock = new();
+
+        public static void InvalidateProcessSnapshot()
+        {
+            lock (_processSnapshotLock)
+            {
+                _processSnapshot = null;
+            }
+        }
+
         public static List<LauncherItem> GetProcessKillerItems(string filter, Action onRefresh)
         {
             var iconProc = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathCpu);
@@ -656,27 +669,50 @@ namespace Beam.Services
 
             try
             {
-                var procs = Process.GetProcesses()
-                    .Where(p => !string.IsNullOrWhiteSpace(p.ProcessName))
-                    .Select(p =>
-                    {
-                        long memMb = 0;
-                        string title = "";
-                        try { memMb = p.WorkingSet64 / (1024 * 1024); } catch { }
-                        try { title = p.MainWindowTitle; } catch { }
-                        return new { Proc = p, Name = p.ProcessName, Id = p.Id, MemMb = memMb, Title = title };
-                    })
-                    .OrderByDescending(x => x.MemMb)
-                    .ToList();
-
-                if (!string.IsNullOrWhiteSpace(filter))
+                List<ProcessEntry> snapshot;
+                lock (_processSnapshotLock)
                 {
-                    procs = procs.Where(x =>
-                        x.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                        x.Title.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (_processSnapshot == null || (DateTime.UtcNow - _lastProcessSnapshotTime).TotalSeconds > 2.0)
+                    {
+                        var procs = Process.GetProcesses();
+                        var entries = new List<ProcessEntry>(procs.Length);
+                        for (int i = 0; i < procs.Length; i++)
+                        {
+                            var p = procs[i];
+                            try
+                            {
+                                string name = p.ProcessName;
+                                if (!string.IsNullOrWhiteSpace(name))
+                                {
+                                    long memMb = 0;
+                                    string title = "";
+                                    try { memMb = p.WorkingSet64 / (1024 * 1024); } catch { }
+                                    try { title = p.MainWindowTitle; } catch { }
+                                    entries.Add(new ProcessEntry(p.Id, name, title, memMb));
+                                }
+                            }
+                            catch { }
+                            finally
+                            {
+                                p.Dispose();
+                            }
+                        }
+                        entries.Sort((a, b) => b.MemMb.CompareTo(a.MemMb));
+                        _processSnapshot = entries;
+                        _lastProcessSnapshotTime = DateTime.UtcNow;
+                    }
+                    snapshot = _processSnapshot;
                 }
 
-                foreach (var item in procs.Take(40))
+                IEnumerable<ProcessEntry> filtered = snapshot;
+                if (!string.IsNullOrWhiteSpace(filter))
+                {
+                    filtered = snapshot.Where(x =>
+                        x.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                        x.Title.Contains(filter, StringComparison.OrdinalIgnoreCase));
+                }
+
+                foreach (var item in filtered.Take(40))
                 {
                     string sub = string.IsNullOrWhiteSpace(item.Title)
                         ? $"PID: {item.Id}"
@@ -696,10 +732,11 @@ namespace Beam.Services
                         {
                             try
                             {
-                                var target = Process.GetProcessById(pid);
+                                using var target = Process.GetProcessById(pid);
                                 string pName = target.ProcessName;
                                 target.Kill();
                                 ToastNotification.Show($"✓ Terminated {pName} (PID {pid})");
+                                InvalidateProcessSnapshot();
                                 onRefresh();
                             }
                             catch (Exception ex)

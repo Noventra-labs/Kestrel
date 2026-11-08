@@ -5,8 +5,8 @@
         Title="Kestrel"
         Width="820" Height="550"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
+        AllowsTransparency="False"
+        Background="{x:Null}"
         ResizeMode="NoResize"
         ShowInTaskbar="True"
         Icon="beam.ico"
@@ -15,6 +15,13 @@
         FontFamily="Segoe UI Variable Text, Segoe UI, -apple-system, BlinkMacSystemFont, sans-serif"
         Deactivated="Window_Deactivated"
         PreviewKeyDown="Window_PreviewKeyDown">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      ResizeBorderThickness="0"
+                      GlassFrameThickness="-1"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
         <SolidColorBrush x:Key="BrandRed" Color="#FF6363" />
@@ -174,11 +181,7 @@
                               Fill="{StaticResource BrandRed}"
                               Cursor="Hand"
                               MouseLeftButtonDown="BrandLogo_Click"
-                              Data="M 0,10 L 10,0 L 20,10 L 10,20 Z M 4.5,10 L 10,4.5 L 15.5,10 L 10,15.5 Z">
-                            <Path.Effect>
-                                <DropShadowEffect BlurRadius="12" ShadowDepth="0" Color="#FF6363" Opacity="0.8" />
-                            </Path.Effect>
-                        </Path>
+                              Data="M 0,10 L 10,0 L 20,10 L 10,20 Z M 4.5,10 L 10,4.5 L 15.5,10 L 10,15.5 Z" />
 
                         <!-- Active Sub-View Mode Pill -->
                         <Border x:Name="ActiveModePill"
@@ -573,16 +576,14 @@
                             Background="#131314"
                             BorderBrush="#222734"
                             BorderThickness="1">
-                        <Grid>
+                        <Grid x:Name="GeminiWebHostGrid">
                             <TextBlock x:Name="GeminiWebLoadingText"
                                        Text="Loading Gemini..."
                                        Foreground="#9CA3AF"
                                        FontSize="13"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
-                            <wv2:WebView2 x:Name="GeminiWebView"
-                                          Visibility="Collapsed"
-                                          Margin="2" />
+                            <!-- WebView2 is dynamically attached in code-behind on first use -->
                         </Grid>
                     </Border>
 
