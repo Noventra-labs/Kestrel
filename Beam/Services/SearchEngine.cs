@@ -150,17 +150,18 @@ namespace Beam.Services
             if (tokens.Length == 1)
             {
                 string token = tokens[0];
-                double best = 0;
+                double bestNameScore = 0;
+                double bestOtherScore = 0;
 
-                // Match against words in item Name
+                // Match against words in item Name (highest priority)
                 var nameWords = item.NameWords;
                 for (int i = 0; i < nameWords.Length; i++)
                 {
                     double s = ScoreTokenAgainstWord(token, nameWords[i]);
                     if (s > 0)
                     {
-                        double val = s * 1.5;
-                        if (val > best) best = val;
+                        double val = s * 2.0;
+                        if (val > bestNameScore) bestNameScore = val;
                     }
                 }
 
@@ -168,9 +169,9 @@ namespace Beam.Services
                 if (item.Acronym.Length >= 2)
                 {
                     if (string.Equals(item.Acronym, token, StringComparison.Ordinal))
-                        best = Math.Max(best, 580.0);
+                        bestNameScore = Math.Max(bestNameScore, 650.0);
                     else if (item.Acronym.StartsWith(token, StringComparison.Ordinal))
-                        best = Math.Max(best, 480.0);
+                        bestNameScore = Math.Max(bestNameScore, 520.0);
                 }
 
                 // Match word boundary in full name
@@ -179,9 +180,15 @@ namespace Beam.Services
                 {
                     char prev = item.Name[idx - 1];
                     if (prev == ' ' || prev == '-' || prev == '_' || prev == '.')
-                        best = Math.Max(best, 440.0 - idx);
+                        bestNameScore = Math.Max(bestNameScore, 500.0 - idx);
                     else
-                        best = Math.Max(best, 260.0 - idx);
+                        bestNameScore = Math.Max(bestNameScore, 300.0 - idx);
+                }
+
+                if (bestNameScore > 0)
+                {
+                    // A direct name match always heavily dominates over subtitle folder paths
+                    return 400.0 + bestNameScore;
                 }
 
                 // Match against rich Keywords
@@ -191,30 +198,30 @@ namespace Beam.Services
                     double s = ScoreTokenAgainstWord(token, kwWords[i]);
                     if (s > 0)
                     {
-                        double val = 180.0 + (s * 0.4);
-                        if (val > best) best = val;
+                        double val = 220.0 + (s * 0.45);
+                        if (val > bestOtherScore) bestOtherScore = val;
                     }
                 }
 
-                // Match against Subtitle words
+                // Match against Subtitle words (e.g. "Windows App")
                 var subWords = item.SubtitleWords;
                 for (int i = 0; i < subWords.Length; i++)
                 {
                     double s = ScoreTokenAgainstWord(token, subWords[i]);
                     if (s > 0)
                     {
-                        double val = 100.0 + (s * 0.25);
-                        if (val > best) best = val;
+                        double val = 120.0 + (s * 0.3);
+                        if (val > bestOtherScore) bestOtherScore = val;
                     }
                 }
 
                 // Category match: only as a modest tiebreaker, never overwhelming
                 if (lowerQuery.Length >= 4 && item.LowerCategory.Contains(lowerQuery, StringComparison.Ordinal))
                 {
-                    best = Math.Max(best, 40.0);
+                    bestOtherScore = Math.Max(bestOtherScore, 40.0);
                 }
 
-                return best;
+                return bestOtherScore;
             }
 
             // 5. Multi-token query evaluation: ALL tokens must match something in the item
@@ -301,7 +308,18 @@ namespace Beam.Services
             if (word.Contains(token, StringComparison.Ordinal))
                 return 180.0;
 
-            // 4. Subsequence fuzzy match
+            // 4. Zero-allocation typo tolerance (Damerau-Levenshtein distance with transpositions)
+            if (token.Length >= 4)
+            {
+                int maxAllowed = token.Length >= 7 ? 2 : 1;
+                int dist = FastEditDistance(token.AsSpan(), word.AsSpan(), maxAllowed);
+                if (dist <= maxAllowed)
+                {
+                    return 240.0 - (dist * 50.0);
+                }
+            }
+
+            // 5. Subsequence fuzzy match
             if (token.Length >= 3 && token.Length <= word.Length)
             {
                 int qIdx = 0;
@@ -312,17 +330,6 @@ namespace Beam.Services
                 }
                 if (qIdx == token.Length)
                     return 130.0;
-            }
-
-            // 5. Zero-allocation typo tolerance (Damerau-Levenshtein distance with transpositions)
-            if (token.Length >= 4)
-            {
-                int maxAllowed = token.Length >= 7 ? 2 : 1;
-                int dist = FastEditDistance(token.AsSpan(), word.AsSpan(), maxAllowed);
-                if (dist <= maxAllowed)
-                {
-                    return 220.0 - (dist * 50.0);
-                }
             }
 
             return 0;
