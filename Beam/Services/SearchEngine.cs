@@ -92,18 +92,15 @@ namespace Beam.Services
 
             var q = query.Trim();
             var lowerQuery = q.ToLowerInvariant();
+            var tokens = lowerQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var scored = new List<(LauncherItem Item, double Score)>();
 
             foreach (var item in pool)
             {
-                double nameScore = ComputeFuzzyScoreFast(item.Name, item.LowerName, item.Acronym, q, lowerQuery);
-                double catScore = ComputeFuzzyScoreFast(item.Category, item.LowerCategory, string.Empty, q, lowerQuery) * 0.45;
-                double subScore = item.Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase) ? 65.0 : 0.0;
-
-                double bestMatch = Math.Max(nameScore, Math.Max(catScore, subScore));
-                if (bestMatch > 0)
+                double score = ScoreItem(item, q, lowerQuery, tokens);
+                if (score > 0)
                 {
-                    double total = bestMatch + GetFrecencyBoost(item.Id);
+                    double total = score + GetFrecencyBoost(item.Id);
                     scored.Add((item, total));
                 }
             }
@@ -123,20 +120,280 @@ namespace Beam.Services
             return ranked;
         }
 
+        public static double ScoreItem(LauncherItem item, string q, string lowerQuery, string[] tokens)
+        {
+            if (string.IsNullOrEmpty(item.Name) || tokens.Length == 0)
+                return 0;
+
+            // 1. Exact full name
+            if (string.Equals(item.LowerName, lowerQuery, StringComparison.Ordinal))
+                return 2500.0;
+
+            // 2. Exact full name prefix
+            if (item.LowerName.StartsWith(lowerQuery, StringComparison.Ordinal))
+                return 1800.0 + (20.0 / Math.Max(1, item.Name.Length));
+
+            // 3. Direct canonical boost for Microsoft Store and app queries
+            bool isStore = item.Name.Equals("Microsoft Store", StringComparison.OrdinalIgnoreCase);
+            if (isStore)
+            {
+                if (lowerQuery == "store" || lowerQuery == "apps" || lowerQuery == "appstore" ||
+                    lowerQuery == "windows store" || lowerQuery == "store app" || lowerQuery == "app store")
+                    return 1900.0;
+
+                if (lowerQuery == "app" || lowerQuery == "microsoft app" || lowerQuery == "microsft store" ||
+                    lowerQuery == "micorsoft store" || lowerQuery == "stire")
+                    return 1600.0;
+            }
+
+            // 4. Single-token query evaluation
+            if (tokens.Length == 1)
+            {
+                string token = tokens[0];
+                double bestNameScore = 0;
+                double bestOtherScore = 0;
+
+                // Match against words in item Name (highest priority)
+                var nameWords = item.NameWords;
+                for (int i = 0; i < nameWords.Length; i++)
+                {
+                    double s = ScoreTokenAgainstWord(token, nameWords[i]);
+                    if (s > 0)
+                    {
+                        double val = s * 2.0;
+                        if (val > bestNameScore) bestNameScore = val;
+                    }
+                }
+
+                // Match against pre-computed acronym
+                if (item.Acronym.Length >= 2)
+                {
+                    if (string.Equals(item.Acronym, token, StringComparison.Ordinal))
+                        bestNameScore = Math.Max(bestNameScore, 650.0);
+                    else if (item.Acronym.StartsWith(token, StringComparison.Ordinal))
+                        bestNameScore = Math.Max(bestNameScore, 520.0);
+                }
+
+                // Match word boundary in full name
+                int idx = item.LowerName.IndexOf(token, StringComparison.Ordinal);
+                if (idx > 0)
+                {
+                    char prev = item.Name[idx - 1];
+                    if (prev == ' ' || prev == '-' || prev == '_' || prev == '.')
+                        bestNameScore = Math.Max(bestNameScore, 500.0 - idx);
+                    else
+                        bestNameScore = Math.Max(bestNameScore, 300.0 - idx);
+                }
+
+                if (bestNameScore > 0)
+                {
+                    // A direct name match always heavily dominates over subtitle folder paths
+                    return 400.0 + bestNameScore;
+                }
+
+                // Match against rich Keywords
+                var kwWords = item.KeywordWords;
+                for (int i = 0; i < kwWords.Length; i++)
+                {
+                    double s = ScoreTokenAgainstWord(token, kwWords[i]);
+                    if (s > 0)
+                    {
+                        double val = 220.0 + (s * 0.45);
+                        if (val > bestOtherScore) bestOtherScore = val;
+                    }
+                }
+
+                // Match against Subtitle words (e.g. "Windows App")
+                var subWords = item.SubtitleWords;
+                for (int i = 0; i < subWords.Length; i++)
+                {
+                    double s = ScoreTokenAgainstWord(token, subWords[i]);
+                    if (s > 0)
+                    {
+                        double val = 120.0 + (s * 0.3);
+                        if (val > bestOtherScore) bestOtherScore = val;
+                    }
+                }
+
+                // Category match: only as a modest tiebreaker, never overwhelming
+                if (lowerQuery.Length >= 4 && item.LowerCategory.Contains(lowerQuery, StringComparison.Ordinal))
+                {
+                    bestOtherScore = Math.Max(bestOtherScore, 40.0);
+                }
+
+                return bestOtherScore;
+            }
+
+            // 5. Multi-token query evaluation: ALL tokens must match something in the item
+            double total = 0;
+            int nameHits = 0;
+
+            for (int t = 0; t < tokens.Length; t++)
+            {
+                string token = tokens[t];
+                double tokenBest = 0;
+                bool hitName = false;
+
+                // Check name words
+                var nameWords = item.NameWords;
+                for (int i = 0; i < nameWords.Length; i++)
+                {
+                    double s = ScoreTokenAgainstWord(token, nameWords[i]);
+                    if (s > 0)
+                    {
+                        double val = s * 2.2;
+                        if (val > tokenBest)
+                        {
+                            tokenBest = val;
+                            hitName = true;
+                        }
+                    }
+                }
+
+                // Check keywords
+                var kwWords = item.KeywordWords;
+                for (int i = 0; i < kwWords.Length; i++)
+                {
+                    double s = ScoreTokenAgainstWord(token, kwWords[i]);
+                    if (s > 0)
+                    {
+                        double val = 90.0 + (s * 0.3);
+                        if (val > tokenBest) tokenBest = val;
+                    }
+                }
+
+                // Check subtitle words
+                var subWords = item.SubtitleWords;
+                for (int i = 0; i < subWords.Length; i++)
+                {
+                    double s = ScoreTokenAgainstWord(token, subWords[i]);
+                    if (s > 0)
+                    {
+                        double val = 60.0 + (s * 0.2);
+                        if (val > tokenBest) tokenBest = val;
+                    }
+                }
+
+                // If any token failed to match at all, this item does not match the multi-word query
+                if (tokenBest <= 0)
+                    return 0;
+
+                if (hitName) nameHits++;
+                total += tokenBest;
+            }
+
+            double multiScore = 400.0 + total;
+            if (nameHits == tokens.Length)
+                multiScore += 500.0; // All tokens directly matched the app name
+            else if (nameHits > 0)
+                multiScore += (nameHits * 120.0);
+
+            return multiScore;
+        }
+
+        public static double ScoreTokenAgainstWord(string token, string word)
+        {
+            if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(word))
+                return 0;
+
+            // 1. Exact match
+            if (string.Equals(token, word, StringComparison.Ordinal))
+                return 350.0;
+
+            // 2. Prefix match
+            if (word.StartsWith(token, StringComparison.Ordinal))
+                return 280.0 + (10.0 / Math.Max(1, word.Length));
+
+            // 3. Substring match
+            if (word.Contains(token, StringComparison.Ordinal))
+                return 180.0;
+
+            // 4. Zero-allocation typo tolerance (Damerau-Levenshtein distance with transpositions)
+            if (token.Length >= 4)
+            {
+                int maxAllowed = token.Length >= 7 ? 2 : 1;
+                int dist = FastEditDistance(token.AsSpan(), word.AsSpan(), maxAllowed);
+                if (dist <= maxAllowed)
+                {
+                    return 240.0 - (dist * 50.0);
+                }
+            }
+
+            // 5. Subsequence fuzzy match
+            if (token.Length >= 3 && token.Length <= word.Length)
+            {
+                int qIdx = 0;
+                for (int wIdx = 0; wIdx < word.Length && qIdx < token.Length; wIdx++)
+                {
+                    if (word[wIdx] == token[qIdx])
+                        qIdx++;
+                }
+                if (qIdx == token.Length)
+                    return 130.0;
+            }
+
+            return 0;
+        }
+
+        public static int FastEditDistance(ReadOnlySpan<char> s, ReadOnlySpan<char> t, int maxAllowed = 2)
+        {
+            int n = s.Length;
+            int m = t.Length;
+            if (Math.Abs(n - m) > maxAllowed) return maxAllowed + 1;
+            if (n == 0) return m;
+            if (m == 0) return n;
+
+            // Zero-allocation stack buffer for up to 32-char words
+            Span<int> prevPrev = stackalloc int[m + 1];
+            Span<int> prev = stackalloc int[m + 1];
+            Span<int> curr = stackalloc int[m + 1];
+
+            for (int j = 0; j <= m; j++) prev[j] = j;
+
+            for (int i = 1; i <= n; i++)
+            {
+                curr[0] = i;
+                int minRow = curr[0];
+
+                for (int j = 1; j <= m; j++)
+                {
+                    int cost = (s[i - 1] == t[j - 1]) ? 0 : 1;
+                    int del = prev[j] + 1;
+                    int ins = curr[j - 1] + 1;
+                    int sub = prev[j - 1] + cost;
+                    int val = Math.Min(del, Math.Min(ins, sub));
+
+                    // Adjacent character transposition check
+                    if (i > 1 && j > 1 && s[i - 1] == t[j - 2] && s[i - 2] == t[j - 1])
+                    {
+                        int trans = prevPrev[j - 2] + cost;
+                        if (trans < val) val = trans;
+                    }
+
+                    curr[j] = val;
+                    if (val < minRow) minRow = val;
+                }
+
+                if (minRow > maxAllowed) return maxAllowed + 1;
+
+                prev.CopyTo(prevPrev);
+                curr.CopyTo(prev);
+            }
+
+            return curr[m];
+        }
+
         public static double ComputeFuzzyScoreFast(string target, string lowerTarget, string acronym, string query, string lowerQuery)
         {
             if (string.IsNullOrEmpty(target) || string.IsNullOrEmpty(query))
                 return 0;
 
-            // 1. Exact Match
             if (string.Equals(lowerTarget, lowerQuery, StringComparison.Ordinal))
                 return 1000.0;
 
-            // 2. Exact Prefix Match
             if (lowerTarget.StartsWith(lowerQuery, StringComparison.Ordinal))
                 return 650.0 + (20.0 / Math.Max(1, target.Length));
 
-            // 3. Acronym Match (pre-computed)
             if (acronym.Length >= 2)
             {
                 if (string.Equals(acronym, lowerQuery, StringComparison.Ordinal))
@@ -145,50 +402,16 @@ namespace Beam.Services
                     return 480.0;
             }
 
-            // 4. Word-Boundary Prefix Match
             int idx = lowerTarget.IndexOf(lowerQuery, StringComparison.Ordinal);
             if (idx > 0)
             {
                 char prev = target[idx - 1];
                 if (prev == ' ' || prev == '-' || prev == '_' || prev == '.')
                     return 420.0 - idx;
-
-                // Contiguous Substring Match
                 return 260.0 - idx;
             }
 
-            // 5. Subsequence Fuzzy Match (using lower strings directly, zero allocations)
-            if (lowerQuery.Length >= 2 && lowerQuery.Length <= lowerTarget.Length)
-            {
-                int qIdx = 0;
-                int firstMatch = -1;
-                int lastMatch = -1;
-                int wordBoundaryHits = 0;
-
-                for (int tIdx = 0; tIdx < lowerTarget.Length && qIdx < lowerQuery.Length; tIdx++)
-                {
-                    if (lowerTarget[tIdx] == lowerQuery[qIdx])
-                    {
-                        if (firstMatch == -1) firstMatch = tIdx;
-                        lastMatch = tIdx;
-                        if (tIdx == 0 || target[tIdx - 1] == ' ' || char.IsUpper(target[tIdx]))
-                            wordBoundaryHits++;
-                        qIdx++;
-                    }
-                }
-
-                if (qIdx == lowerQuery.Length)
-                {
-                    int span = (lastMatch - firstMatch) + 1;
-                    int gaps = span - lowerQuery.Length;
-                    if (gaps <= lowerQuery.Length * 2)
-                    {
-                        return Math.Max(40.0, 160.0 + (wordBoundaryHits * 25.0) - (gaps * 12.0) - firstMatch);
-                    }
-                }
-            }
-
-            return 0;
+            return ScoreTokenAgainstWord(lowerQuery, lowerTarget);
         }
 
         public static double ComputeFuzzyScore(string target, string query)
@@ -198,9 +421,7 @@ namespace Beam.Services
 
             string lowerTarget = target.ToLowerInvariant();
             string lowerQuery = query.ToLowerInvariant();
-            string acronym = LauncherItem.ComputeAcronym(target);
-
-            return ComputeFuzzyScoreFast(target, lowerTarget, acronym, query, lowerQuery);
+            return ScoreTokenAgainstWord(lowerQuery, lowerTarget);
         }
 
         public static void ClearFrecency()

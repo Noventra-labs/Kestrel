@@ -109,11 +109,42 @@ namespace Beam
                 }
 
                 Log("MainWindow v2.3 initialized and active.");
+                EnsureShortcuts();
             }
             catch (Exception ex)
             {
                 Log($"MainWindow creation failed: {ex}");
             }
+        }
+
+        private static void EnsureShortcuts()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    var exe = Process.GetCurrentProcess().MainModule?.FileName;
+                    if (string.IsNullOrEmpty(exe) || !File.Exists(exe)) return;
+
+                    string startPrograms = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+                    string startLnk = Path.Combine(startPrograms, "Kestrel.lnk");
+                    string workDir = Path.GetDirectoryName(exe) ?? string.Empty;
+                    string ico = Path.Combine(workDir, "beam.ico");
+                    if (!File.Exists(ico)) ico = exe;
+
+                    if (!File.Exists(startLnk))
+                    {
+                        Beam.Interop.ShortcutHelper.CreateShortcut(
+                            startLnk,
+                            exe,
+                            workDir,
+                            "Kestrel — Fast Command Bar for Windows",
+                            ico);
+                        Beam.Interop.ShortcutHelper.NotifyShell();
+                    }
+                }
+                catch { }
+            });
         }
 
         protected override void OnExit(ExitEventArgs e)

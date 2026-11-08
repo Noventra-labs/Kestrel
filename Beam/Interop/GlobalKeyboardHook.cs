@@ -220,7 +220,7 @@ namespace Beam.Interop
 
                                 // Mask Start Menu immediately on KeyDown!
                                 // By injecting an unassigned virtual key (0xE8) while the Windows key is down,
-                                // Windows Shell registers that a chord occurred and clears its internal
+                                // Windows Shell registers that a companion key was pressed and clears its internal
                                 // standalone Start Menu flag (fWinKey = false). When the Windows key is subsequently released,
                                 // Windows Shell will NOT open the Start Menu.
                                 var mask = new INPUT[2];
