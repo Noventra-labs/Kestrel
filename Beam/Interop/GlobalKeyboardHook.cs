@@ -16,7 +16,7 @@ namespace Beam.Interop
         private const ushort VK_LWIN = 0x5B;
         private const ushort VK_RWIN = 0x5C;
         private const int VK_MENU = 0x12; // Alt key
-        private const ushort VK_MASK_E8 = 0xE8; // Unassigned virtual key used to cancel Windows Start Menu
+        private const ushort VK_LCONTROL = 0xA2; // Left Control used to mask Start Menu chord in Windows Shell
 
         private const uint INPUT_KEYBOARD = 1;
         private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -56,6 +56,9 @@ namespace Beam.Interop
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct KBDLLHOOKSTRUCT
@@ -164,7 +167,7 @@ namespace Beam.Interop
                     ki = new KEYBDINPUT
                     {
                         wVk = vk,
-                        wScan = 0,
+                        wScan = (ushort)MapVirtualKey(vk, 0),
                         dwFlags = keyUp ? KEYEVENTF_KEYUP : 0u,
                         time = 0,
                         dwExtraInfo = extraInfo
@@ -224,18 +227,21 @@ namespace Beam.Interop
 
                             if (wasAlone)
                             {
-                                // 1. Synthesize neutral unassigned key (0xE8) Down + Up BEFORE releasing Win key,
-                                //    followed by Win Up so the OS modifier table does not keep Win stuck down.
+                                // 1. Synthesize neutral Left Control (0xA2) Down + Up with hardware scan code
+                                //    BEFORE releasing Win key. Windows Shell intercepts this chord (Win + Ctrl)
+                                //    and suppresses the Start Menu opening sequence.
+                                // 2. Follow with synthetic Win Up stamped with EXTRA_INFO_SIGNATURE so the OS
+                                //    modifier table cleanly releases the Win key state without triggering Start Menu.
                                 var inputs = new INPUT[3];
-                                inputs[0] = CreateKeyInput(VK_MASK_E8, false, EXTRA_INFO_SIGNATURE);
-                                inputs[1] = CreateKeyInput(VK_MASK_E8, true, EXTRA_INFO_SIGNATURE);
+                                inputs[0] = CreateKeyInput(VK_LCONTROL, false, EXTRA_INFO_SIGNATURE);
+                                inputs[1] = CreateKeyInput(VK_LCONTROL, true, EXTRA_INFO_SIGNATURE);
                                 inputs[2] = CreateKeyInput((ushort)kbd.vkCode, true, EXTRA_INFO_SIGNATURE);
                                 SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
-                                // 2. Trigger Beam launcher
+                                // 3. Trigger Kestrel launcher
                                 _onTrigger?.Invoke();
 
-                                // 3. Swallow the raw physical Win Up so explorer.exe never opens Start Menu
+                                // 4. Swallow the raw physical Win Up so explorer.exe never opens Start Menu
                                 return (IntPtr)1;
                             }
                         }

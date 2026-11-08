@@ -284,7 +284,7 @@
             <!-- Bottom Action Bar -->
             <Border Grid.Row="2" Background="#0C0E13" BorderBrush="#1C202B" BorderThickness="0,1,0,0" Padding="24,0">
                 <Grid VerticalAlignment="Center">
-                    <TextBlock Text="Noventra Labs" Foreground="#4B5563" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
+                    <TextBlock Text="Noventra Labs" Foreground="#6B7280" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="Visit https://github.com/Noventra-labs/Kestrel" />
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Border x:Name="BtnCancel"

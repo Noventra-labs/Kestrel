@@ -1455,6 +1455,11 @@ namespace Beam
             ToastNotification.Show("✓ Kestrel Preferences Saved");
         }
 
+        private void NoventraLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            AppScanner.LaunchFile("https://github.com/Noventra-labs/Kestrel");
+        }
+
         #endregion
 
         #region Confetti Animation

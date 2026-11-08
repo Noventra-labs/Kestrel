@@ -19,6 +19,8 @@
     <AssemblyTitle>Kestrel Setup — Noventra Labs</AssemblyTitle>
     <Copyright>Copyright © 2026 Noventra Labs. All rights reserved.</Copyright>
     <Description>Official Standalone Windows Installer for Kestrel by Noventra Labs</Description>
+    <RepositoryUrl>https://github.com/Noventra-labs/Kestrel</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Noventra-labs/Kestrel</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

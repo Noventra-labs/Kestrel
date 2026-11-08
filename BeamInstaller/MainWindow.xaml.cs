@@ -268,6 +268,9 @@ namespace BeamInstaller
                             unKey.SetValue("EstimatedSize", 2048, RegistryValueKind.DWord);
                             unKey.SetValue("NoModify", 1, RegistryValueKind.DWord);
                             unKey.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+                            unKey.SetValue("HelpLink", "https://github.com/Noventra-labs/Kestrel", RegistryValueKind.String);
+                            unKey.SetValue("URLInfoAbout", "https://github.com/Noventra-labs/Kestrel", RegistryValueKind.String);
+                            unKey.SetValue("URLUpdateInfo", "https://github.com/Noventra-labs/Kestrel/releases", RegistryValueKind.String);
                         }
                     }
                     catch { }
@@ -396,6 +399,15 @@ namespace BeamInstaller
             });
 
             Close();
+        }
+
+        private void NoventraLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("https://github.com/Noventra-labs/Kestrel") { UseShellExecute = true });
+            }
+            catch { }
         }
     }
 }

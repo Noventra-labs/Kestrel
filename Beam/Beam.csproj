@@ -19,6 +19,8 @@
     <AssemblyTitle>Kestrel Launcher by Noventra Labs</AssemblyTitle>
     <Copyright>Copyright © 2026 Noventra Labs. All rights reserved.</Copyright>
     <Description>High-Definition Raycast for Windows Clone by Noventra Labs</Description>
+    <RepositoryUrl>https://github.com/Noventra-labs/Kestrel</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Noventra-labs/Kestrel</PackageProjectUrl>
     <TieredCompilation>true</TieredCompilation>
     <TieredPGO>true</TieredPGO>
     <PublishReadyToRun>true</PublishReadyToRun>
