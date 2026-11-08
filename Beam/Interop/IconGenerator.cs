@@ -104,6 +104,31 @@ namespace Beam.Interop
         // Lucide: refresh-cw
         public const string PathRefresh = "M21,2 V8 H15 M3,12 A9,9 0 0,1 18.36,5.64 L21,8 M3,22 V16 H9 M21,12 A9,9 0 0,1 5.64,18.36 L3,16";
 
+        // Microsoft PowerToys & Mem Reduct Lucide Vector Icons
+        // Lucide: pipette (Color Picker)
+        public const string PathPipette = "M2,22 C4,21 7,19 10,18 L18.5,9.5 A3.54,3.54 0 0,0 18.5,4.5 A3.54,3.54 0 0,0 13.5,4.5 L5,13 C4,16 2,22 2,22 Z M16,8 L19,11 M9.5,14.5 L7.5,16.5";
+
+        // Lucide: scan-text (Text Extractor OCR)
+        public const string PathScanText = "M3,7 V5 A2,2 0 0,1 5,3 H7 M17,3 H19 A2,2 0 0,1 21,5 V7 M21,17 V19 A2,2 0 0,1 19,21 H17 M7,21 H5 A2,2 0 0,1 3,19 V17 M7,8 H17 M7,12 H17 M7,16 H13";
+
+        // Lucide: coffee (Awake)
+        public const string PathCoffee = "M18,8 H19 A3,3 0 0,1 22,11 V11 A3,3 0 0,1 19,14 H18 M2,8 H18 V14 A4,4 0 0,1 14,18 H6 A4,4 0 0,1 2,14 Z M6,1 V4 M10,1 V4 M14,1 V4";
+
+        // Lucide: pin (Always on Top)
+        public const string PathPin = "M12,17 V22 M5,17 H19 M15,4 L18,7 L14,11 V17 H10 V11 L6,7 L9,4 Z";
+
+        // Lucide: memory-stick / RAM (Mem Reduct)
+        public const string PathMemory = "M6,2 H18 A2,2 0 0,1 20,4 V20 A2,2 0 0,1 18,22 H6 A2,2 0 0,1 4,20 V4 A2,2 0 0,1 6,2 Z M9,6 H15 M9,10 H15 M9,14 H15 M8,18 H16";
+
+        // Lucide: hash (Developer Hasher)
+        public const string PathHash = "M4,9 H20 M4,15 H20 M10,3 L8,21 M16,3 L14,21";
+
+        // Lucide: clock (Unix Epoch & Timestamps)
+        public const string PathClock = "M12,2 A10,10 0 1,0 22,12 A10,10 0 0,0 12,2 Z M12,6 V12 L16,14";
+
+        // Lucide: network (DNS & Network Info)
+        public const string PathNetwork = "M9,2 H15 V8 H9 Z M2,16 H8 V22 H2 Z M16,16 H22 V22 H16 Z M12,8 V13 M5,16 V13 H19 V16";
+
         public static ImageSource GetSquircleIcon(SquircleTheme theme, string svgPath, bool asStroke = false)
         {
             string key = $"{theme}:{svgPath}:{asStroke}";
@@ -115,8 +140,11 @@ namespace Beam.Interop
 
             // 1. Raycast Squircle Rounded Box (32x32 with subtle gradient and light inner border)
             var bgBrush = new LinearGradientBrush(c1, c2, new System.Windows.Point(0, 0), new System.Windows.Point(1, 1));
+            bgBrush.Freeze();
             var rectGeo = new RectangleGeometry(new Rect(0, 0, 32, 32), 8.0, 8.0);
+            rectGeo.Freeze();
             var borderPen = new System.Windows.Media.Pen(new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 255, 255, 255)), 1.0);
+            borderPen.Freeze();
             group.Children.Add(new GeometryDrawing(bgBrush, borderPen, rectGeo));
 
             // 2. Lucide Vector Icon scaled & centered precisely inside 32x32
@@ -137,12 +165,13 @@ namespace Beam.Interop
 
                 var transformedGeo = pathGeo.Clone();
                 transformedGeo.Transform = transformGroup;
+                transformedGeo.Freeze();
 
-                // Lucide uses clean strokes (thickness 2 normalized) or crisp fills
                 System.Windows.Media.Brush iconBrush = new SolidColorBrush(Colors.White);
-                System.Windows.Media.Pen? iconPen = null;
+                iconBrush.Freeze();
 
-                if (asStroke || svgPath.StartsWith("M4,5") || svgPath.StartsWith("M12,2 L20") || svgPath.StartsWith("M15,3") || svgPath.StartsWith("M4,14") || svgPath.StartsWith("M12,2 V12"))
+                System.Windows.Media.Pen? iconPen;
+                if (asStroke || svgPath.StartsWith("M4,5") || svgPath.StartsWith("M12,2 L20") || svgPath.StartsWith("M15,3") || svgPath.StartsWith("M4,14") || svgPath.StartsWith("M12,2 V12") || svgPath.StartsWith("M2,22") || svgPath.StartsWith("M3,7") || svgPath.StartsWith("M18,8") || svgPath.StartsWith("M4,9"))
                 {
                     iconPen = new System.Windows.Media.Pen(iconBrush, 2.0)
                     {
@@ -150,6 +179,7 @@ namespace Beam.Interop
                         EndLineCap = PenLineCap.Round,
                         LineJoin = PenLineJoin.Round
                     };
+                    iconPen.Freeze();
                     group.Children.Add(new GeometryDrawing(null, iconPen, transformedGeo));
                 }
                 else
@@ -160,6 +190,7 @@ namespace Beam.Interop
                         EndLineCap = PenLineCap.Round,
                         LineJoin = PenLineJoin.Round
                     };
+                    iconPen.Freeze();
                     group.Children.Add(new GeometryDrawing(iconBrush, iconPen, transformedGeo));
                 }
             }

@@ -10,7 +10,21 @@ namespace Beam.Services
 {
     public class IndexedFileEntry
     {
-        public string Name { get; set; } = string.Empty;
+        private string _name = string.Empty;
+
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                _name = value ?? string.Empty;
+                LowerName = _name.ToLowerInvariant();
+                Acronym = LauncherItem.ComputeAcronym(_name);
+            }
+        }
+
+        public string LowerName { get; private set; } = string.Empty;
+        public string Acronym { get; private set; } = string.Empty;
         public string FullPath { get; set; } = string.Empty;
         public string Directory { get; set; } = string.Empty;
         public string Extension { get; set; } = string.Empty;
@@ -121,8 +135,9 @@ namespace Beam.Services
             else
             {
                 var q = query.Trim();
+                var lowerQuery = q.ToLowerInvariant();
                 matches = snapshot
-                    .Select(f => new { File = f, Score = SearchEngine.ComputeFuzzyScore(f.Name, q) })
+                    .Select(f => new { File = f, Score = SearchEngine.ComputeFuzzyScoreFast(f.Name, f.LowerName, f.Acronym, q, lowerQuery) })
                     .Where(x => x.Score > 0)
                     .OrderByDescending(x => x.Score)
                     .ThenByDescending(x => x.File.LastWrite)
@@ -140,7 +155,7 @@ namespace Beam.Services
                     Subtitle = f.Directory,
                     Category = string.IsNullOrEmpty(f.Extension) ? "File" : f.Extension.TrimStart('.').ToUpperInvariant() + " File",
                     ShortcutBadge = "Open ↵",
-                    Icon = ShellIconHelper.GetIcon(pathCopy),
+                    Icon = ShellIconHelper.GetFastFileIcon(pathCopy, f.Extension),
                     Path = pathCopy,
                     Action = () => AppScanner.LaunchFile(pathCopy)
                 });
@@ -150,4 +165,3 @@ namespace Beam.Services
         }
     }
 }
-

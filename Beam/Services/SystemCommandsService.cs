@@ -174,6 +174,203 @@ namespace Beam.Services
                 });
             }
 
+            // Mem Reduct Engine (henrypp/memreduct)
+            if (cfg.EnableMemReduct)
+            {
+                var iconMem = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathMemory);
+                var mem = MemoryReductService.GetMemoryStats();
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:memreduct_clean",
+                    Name = "Clean & Reduce Memory (Mem Reduct)",
+                    Subtitle = $"RAM: {mem.LoadPercent}% used ({mem.UsedPhysGb:F1} GB / {mem.TotalPhysGb:F1} GB) • Purge Standby lists & sweep working sets",
+                    Category = "System Tool",
+                    Section = "Commands",
+                    ShortcutBadge = "Clean RAM",
+                    Icon = iconMem,
+                    Action = () =>
+                    {
+                        Task.Run(() =>
+                        {
+                            var res = MemoryReductService.ReduceMemory();
+                            App.Current.Dispatcher.Invoke(() =>
+                            {
+                                ToastNotification.Show($"✓ Mem Reduct: Freed {res.FreedMb:N0} MB RAM • Usage dropped {res.LoadBefore}% → {res.LoadAfter}%");
+                            });
+                        });
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:memreduct_standby",
+                    Name = "Purge Standby Memory List",
+                    Subtitle = "Mem Reduct — Flush Windows cached standby memory into free physical RAM",
+                    Category = "System Tool",
+                    Section = "Commands",
+                    Icon = iconMem,
+                    Action = () =>
+                    {
+                        Task.Run(() =>
+                        {
+                            var res = MemoryReductService.ReduceMemory(purgeStandby: true, flushModified: false, sweepProcesses: false);
+                            App.Current.Dispatcher.Invoke(() =>
+                            {
+                                ToastNotification.Show($"✓ Standby Purged: Freed {res.FreedMb:N0} MB RAM • Usage {res.LoadBefore}% → {res.LoadAfter}%");
+                            });
+                        });
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:memreduct_workingset",
+                    Name = "Trim Working Sets (All Processes)",
+                    Subtitle = "Mem Reduct — Empty working set memory across all running apps",
+                    Category = "System Tool",
+                    Section = "Commands",
+                    Icon = iconMem,
+                    Action = () =>
+                    {
+                        Task.Run(() =>
+                        {
+                            var res = MemoryReductService.ReduceMemory(purgeStandby: false, flushModified: false, sweepProcesses: true);
+                            App.Current.Dispatcher.Invoke(() =>
+                            {
+                                ToastNotification.Show($"✓ Working Sets Swept: Cleaned {res.ProcessesCleaned} processes • Freed {res.FreedMb:N0} MB");
+                            });
+                        });
+                    }
+                });
+            }
+
+            // Microsoft PowerToys Suite
+            if (cfg.EnablePowerTools)
+            {
+                var iconPipette = IconGenerator.GetSquircleIcon(SquircleTheme.BrandCoral, IconGenerator.PathPipette);
+                var iconOcr = IconGenerator.GetSquircleIcon(SquircleTheme.WebCyan, IconGenerator.PathScanText);
+                var iconCoffee = IconGenerator.GetSquircleIcon(SquircleTheme.ClipAmber, IconGenerator.PathCoffee);
+                var iconPin = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathPin);
+                var iconDev = IconGenerator.GetSquircleIcon(SquircleTheme.SystemPurple, IconGenerator.PathHash);
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_colorpicker",
+                    Name = "Color Picker (Screen Eyedropper)",
+                    Subtitle = "PowerToys Color Picker — 8x pixel loupe magnifier to pick and copy HEX/RGB color",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    ShortcutBadge = "Win+Shift+C",
+                    Icon = iconPipette,
+                    Action = () =>
+                    {
+                        var picker = new Beam.Views.ColorPickerWindow();
+                        picker.Show();
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_text_extractor",
+                    Name = "Text Extractor (Screen OCR)",
+                    Subtitle = "PowerToys Text Extractor — Snip any area of screen to copy OCR text to clipboard",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    ShortcutBadge = "Win+Shift+T",
+                    Icon = iconOcr,
+                    Action = () =>
+                    {
+                        var ocr = new Beam.Views.TextExtractorWindow();
+                        ocr.Show();
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_awake_indefinite",
+                    Name = "Awake: Keep Screen Awake (Indefinitely)",
+                    Subtitle = "PowerToys Awake — Keep computer & screen awake indefinitely (prevent sleep & lock)",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    ShortcutBadge = "Awake ☕",
+                    Icon = iconCoffee,
+                    Action = () =>
+                    {
+                        AwakeService.SetMode(AwakeMode.Indefinite);
+                        ToastNotification.Show("☕ Awake: Screen will stay awake indefinitely");
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_awake_1h",
+                    Name = "Awake: Keep Screen Awake (1 Hour)",
+                    Subtitle = "PowerToys Awake — Keep computer & screen awake for 1 hour",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    Icon = iconCoffee,
+                    Action = () =>
+                    {
+                        AwakeService.SetMode(AwakeMode.Hours1);
+                        ToastNotification.Show("☕ Awake: Screen will stay awake for 1 hour");
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_awake_30m",
+                    Name = "Awake: Keep Screen Awake (30 Minutes)",
+                    Subtitle = "PowerToys Awake — Keep computer & screen awake for 30 minutes",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    Icon = iconCoffee,
+                    Action = () =>
+                    {
+                        AwakeService.SetMode(AwakeMode.Minutes30);
+                        ToastNotification.Show("☕ Awake: Screen will stay awake for 30 minutes");
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_awake_off",
+                    Name = "Awake: Off (Allow Screen Sleep)",
+                    Subtitle = "PowerToys Awake — Restore normal Windows power and screen sleep timers",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    Icon = iconCoffee,
+                    Action = () =>
+                    {
+                        AwakeService.SetMode(AwakeMode.Off);
+                        ToastNotification.Show("✓ Awake disabled • Normal sleep mode active");
+                    }
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_always_on_top",
+                    Name = "Always on Top (Pin Window)",
+                    Subtitle = "PowerToys Always on Top — Pin or unpin active window to stay topmost",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    ShortcutBadge = "Pin 📌",
+                    Icon = iconPin,
+                    Action = () => WindowManagerService.ToggleAlwaysOnTop()
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:powertoys_hosts_file",
+                    Name = "Edit Windows Hosts File",
+                    Subtitle = "PowerToys Hosts File Editor — Open hosts file in elevated Notepad",
+                    Category = "PowerToys",
+                    Section = "Commands",
+                    Icon = iconDev,
+                    Action = PowerDeveloperToolsService.OpenHostsFile
+                });
+            }
+
             // 5. Preferences & Confetti (Always available)
             commands.Add(new LauncherItem
             {

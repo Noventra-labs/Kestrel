@@ -13,6 +13,7 @@ namespace Beam.Interop
     public static class ShellIconHelper
     {
         private static readonly ConcurrentDictionary<string, ImageSource> IconCache = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, ImageSource> ExtensionCache = new(StringComparer.OrdinalIgnoreCase);
 
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr SHGetFileInfo(
@@ -59,8 +60,64 @@ namespace Beam.Interop
         private const uint SHGFI_ICON = 0x000000100;
         private const uint SHGFI_LARGEICON = 0x000000000;
         private const uint SHGFI_SYSICONINDEX = 0x000004000;
+        private const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
+        private const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
         private const int SHIL_EXTRALARGE = 0x02; // 48x48 high-DPI shell icon
         private const int ILD_TRANSPARENT = 0x00000001;
+
+        public static ImageSource GetFastFileIcon(string path, string extension)
+        {
+            var ext = (extension ?? string.Empty).ToLowerInvariant();
+            if (ext == ".exe" || ext == ".lnk" || ext == ".ico" || string.IsNullOrEmpty(ext))
+            {
+                return GetIcon(path);
+            }
+
+            if (ExtensionCache.TryGetValue(ext, out var cached))
+                return cached;
+
+            try
+            {
+                var shinfo = new SHFILEINFO();
+                var res = SHGetFileInfo(
+                    ext,
+                    FILE_ATTRIBUTE_NORMAL,
+                    ref shinfo,
+                    (uint)Marshal.SizeOf<SHFILEINFO>(),
+                    SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES);
+
+                if (res != IntPtr.Zero && shinfo.iIcon > 0)
+                {
+                    var iidImageList = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
+                    if (SHGetImageList(SHIL_EXTRALARGE, ref iidImageList, out var imgList) == 0 && imgList != null)
+                    {
+                        if (imgList.GetIcon(shinfo.iIcon, ILD_TRANSPARENT, out var hIcon48) == 0 && hIcon48 != IntPtr.Zero)
+                        {
+                            try
+                            {
+                                var bs = Imaging.CreateBitmapSourceFromHIcon(
+                                    hIcon48,
+                                    Int32Rect.Empty,
+                                    BitmapSizeOptions.FromEmptyOptions());
+                                bs.Freeze();
+                                ExtensionCache[ext] = bs;
+                                return bs;
+                            }
+                            finally
+                            {
+                                DestroyIcon(hIcon48);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Fallback to standard path-based extractor
+            var standard = GetIcon(path);
+            ExtensionCache[ext] = standard;
+            return standard;
+        }
 
         public static ImageSource GetIcon(string path)
         {

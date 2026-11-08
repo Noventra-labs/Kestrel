@@ -26,6 +26,10 @@ namespace Beam.Services
         public bool EnableProcessKiller { get; set; } = true;
         public bool EnableSystemCommands { get; set; } = true;
         public bool EnableWebFallbacks { get; set; } = true;
+        public bool EnableMemReduct { get; set; } = true;
+        public bool AutoMemReductEnabled { get; set; } = false;
+        public int AutoMemReductThreshold { get; set; } = 85;
+        public bool EnablePowerTools { get; set; } = true;
 
         // 3. Gemini & Multi-Provider Local + Cloud AI Configuration
         public bool UseEmbeddedGeminiWeb { get; set; } = true;

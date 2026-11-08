@@ -47,6 +47,7 @@ namespace Beam
         private bool _isGeminiWebModeActive = true;
         private DateTime _ignoreDeactivateUntil = DateTime.MinValue;
         private CancellationTokenSource? _aiCts;
+        private CancellationTokenSource? _searchCts;
         private Forms.NotifyIcon? _notifyIcon;
         private GlobalKeyboardHook? _keyboardHook;
         private DispatcherTimer? _watchdogTimer;
@@ -323,6 +324,8 @@ namespace Beam
             }
 
             _watchdogTimer?.Stop();
+            _searchCts?.Cancel();
+            _searchCts?.Dispose();
             BeamSettings.SettingsChanged -= OnSettingsChanged;
             SystemEvents.PowerModeChanged -= OnSystemPowerOrSessionChanged;
             SystemEvents.SessionSwitch -= OnSystemPowerOrSessionChanged;
@@ -551,6 +554,10 @@ namespace Beam
             }
 
             // Main Search Mode (with Fuzzy + Acronym + Frecency Engine)
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
+
             var list = new List<LauncherItem>();
 
             // 1. Instant Calculator, Percentage, Unit, Currency, Timezone Evaluator (if enabled)
@@ -574,6 +581,27 @@ namespace Beam
                 });
             }
 
+            // 2. Instant Power Developer Tools Evaluator (guid, sha256, md5, epoch, base64)
+            var dev = PowerDeveloperToolsService.EvaluateInline(query);
+            if (dev.IsValid)
+            {
+                var devIcon = IconGenerator.GetSquircleIcon(dev.Theme, dev.SvgPath);
+                list.Add(new LauncherItem
+                {
+                    Id = "dev:" + dev.Result,
+                    Name = dev.Title,
+                    Subtitle = dev.Subtitle,
+                    Category = dev.Category,
+                    ShortcutBadge = dev.Badge,
+                    Icon = devIcon,
+                    Action = () =>
+                    {
+                        System.Windows.Clipboard.SetText(dev.Result);
+                        ToastNotification.Show($"✓ Copied {dev.Category}: {dev.Title}");
+                    }
+                });
+            }
+
             var pool = new List<LauncherItem>(_builtInCommands.Count + _allApps.Count);
             pool.AddRange(_builtInCommands);
             pool.AddRange(_allApps);
@@ -590,26 +618,43 @@ namespace Beam
                     : $"{_activeCategoryFilter}s";
 
                 list.AddRange(SearchEngine.RankAndFilter(pool, "", 55));
+                _currentItems = list;
+                BindResults();
             }
             else
             {
-                SectionHeaderText.Text = math.IsValid ? "Calculator & Fuzzy Matches" : "Top Fuzzy & Acronym Matches";
+                SectionHeaderText.Text = (math.IsValid || dev.IsValid) ? "Instant Results & Top Matches" : "Top Fuzzy & Acronym Matches";
 
-                // Rank apps & commands via Fuzzy + Acronym + Frecency scoring
-                list.AddRange(SearchEngine.RankAndFilter(pool, query, 40));
-
-                // Include top matching local files when query >= 2 chars and File Search is enabled
-                if (cfg.EnableFileSearch && query.Length >= 2 && _activeCategoryFilter == "All")
+                // Offload ranking and file searching to background Task to keep UI thread completely responsive (<5ms)
+                Task.Run(() =>
                 {
-                    list.AddRange(FileSearchService.SearchFiles(query, 6));
-                }
+                    if (token.IsCancellationRequested) return;
 
-                // Append Gemini AI & Web Search fallbacks
-                list.AddRange(SystemCommandsService.GetWebFallbackItems(query, (webMode, p) => OpenGeminiChatOverlay(webMode, p)));
+                    var ranked = SearchEngine.RankAndFilter(pool, query, 40);
+                    if (token.IsCancellationRequested) return;
+
+                    var fileMatches = (cfg.EnableFileSearch && query.Length >= 2 && _activeCategoryFilter == "All")
+                        ? FileSearchService.SearchFiles(query, 6)
+                        : null;
+                    if (token.IsCancellationRequested) return;
+
+                    var webItems = SystemCommandsService.GetWebFallbackItems(query, (webMode, p) => OpenGeminiChatOverlay(webMode, p));
+                    if (token.IsCancellationRequested) return;
+
+                    var combined = new List<LauncherItem>(list.Count + ranked.Count + (fileMatches?.Count ?? 0) + webItems.Count);
+                    combined.AddRange(list);
+                    combined.AddRange(ranked);
+                    if (fileMatches != null) combined.AddRange(fileMatches);
+                    combined.AddRange(webItems);
+
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+                        _currentItems = combined;
+                        BindResults();
+                    }, DispatcherPriority.Normal);
+                }, token);
             }
-
-            _currentItems = list;
-            BindResults();
         }
 
         private void BindResults()
@@ -639,9 +684,11 @@ namespace Beam
                 StatusText.Text = $"{item.Name} • {item.Category}";
                 PrimaryActionLabel.Text = item.Category switch
                 {
-                    "Calculator" => "Copy Result",
+                    "Calculator" or "Hasher" or "Timestamp" or "Timestamp Converter" or "Base64 Encoder" or "Base64 Decoder" or "GUID Generator" => "Copy Result",
                     "Clipboard" or "Pinned Clip" => "Paste to App",
                     "Window Management" => "Snap Window",
+                    "PowerToys" => item.Name.Contains("Color") ? "Pick Color" : (item.Name.Contains("Text") ? "Snip OCR" : "Run"),
+                    "System Tool" => item.Name.Contains("Mem") ? "Free RAM" : "Run",
                     "AI Command" or "Gemini AI" => "Open Gemini",
                     _ when item.Id.StartsWith("proc:") => "Kill Process",
                     _ => "Open"

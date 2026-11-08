@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 using Beam.Interop;
 using Beam.Models;
 
@@ -50,11 +51,24 @@ namespace Beam.Services
         [DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
         private const int SW_RESTORE = 9;
         private const int SW_MAXIMIZE = 3;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_NOZORDER = 0x0004;
         private const uint SWP_SHOWWINDOW = 0x0040;
         private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TOPMOST = 0x00000008;
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         private struct MONITORINFO
@@ -63,6 +77,42 @@ namespace Beam.Services
             public DwmApi.RECT rcMonitor;
             public DwmApi.RECT rcWork;
             public uint dwFlags;
+        }
+
+        public static bool ToggleAlwaysOnTop()
+        {
+            IntPtr target = GlobalKeyboardHook.LastActiveWindow;
+            if (!DwmApi.IsValidTargetWindow(target, GlobalKeyboardHook.BeamWindowHandle))
+            {
+                target = DwmApi.GetTopMostTargetWindow(GlobalKeyboardHook.BeamWindowHandle);
+            }
+
+            if (target == IntPtr.Zero || target == GlobalKeyboardHook.BeamWindowHandle)
+            {
+                ToastNotification.Show("No active application window found to pin");
+                return false;
+            }
+
+            var sb = new StringBuilder(256);
+            GetWindowText(target, sb, 256);
+            string title = sb.ToString();
+            if (string.IsNullOrWhiteSpace(title)) title = "Active Window";
+
+            int exStyle = GetWindowLong(target, GWL_EXSTYLE);
+            bool isTopmost = (exStyle & WS_EX_TOPMOST) != 0;
+
+            if (isTopmost)
+            {
+                SetWindowPos(target, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                ToastNotification.Show($"📌 Unpinned Window: {title}");
+                return false;
+            }
+            else
+            {
+                SetWindowPos(target, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                ToastNotification.Show($"📌 Pinned Always on Top: {title}");
+                return true;
+            }
         }
 
         public static void ApplySnap(WindowSnapLayout layout)
@@ -128,18 +178,16 @@ namespace Beam.Services
                     h = workH - (workH / 2);
                     break;
                 case WindowSnapLayout.Center:
-                    w = (int)(workW * 0.72);
-                    h = (int)(workH * 0.78);
+                    w = (int)(workW * 0.75);
+                    h = (int)(workH * 0.75);
                     x = workX + (workW - w) / 2;
                     y = workY + (workH - h) / 2;
                     break;
                 case WindowSnapLayout.AlmostMaximize:
-                    int padX = (int)(workW * 0.04);
-                    int padY = (int)(workH * 0.04);
-                    x = workX + padX;
-                    y = workY + padY;
-                    w = workW - padX * 2;
-                    h = workH - padY * 2;
+                    w = (int)(workW * 0.94);
+                    h = (int)(workH * 0.94);
+                    x = workX + (workW - w) / 2;
+                    y = workY + (workH - h) / 2;
                     break;
                 case WindowSnapLayout.TopLeftQuarter:
                     w = workW / 2;
@@ -166,37 +214,18 @@ namespace Beam.Services
                     break;
                 case WindowSnapLayout.LastTwoThirds:
                     x = workX + workW / 3;
-                    w = workW - (workW / 3);
+                    w = (workW * 2) / 3;
                     break;
-            }
-
-            // Compensate for Windows 11 invisible DWM drop-shadow borders (DWMWA_EXTENDED_FRAME_BOUNDS)
-            if (GetWindowRect(target, out DwmApi.RECT winRect) &&
-                DwmApi.DwmGetWindowAttribute(
-                    target,
-                    DwmApi.DWMWA_EXTENDED_FRAME_BOUNDS,
-                    out DwmApi.RECT frameRect,
-                    Marshal.SizeOf<DwmApi.RECT>()) == 0)
-            {
-                int leftMargin = Math.Max(0, frameRect.Left - winRect.Left);
-                int topMargin = Math.Max(0, frameRect.Top - winRect.Top);
-                int rightMargin = Math.Max(0, winRect.Right - frameRect.Right);
-                int bottomMargin = Math.Max(0, winRect.Bottom - frameRect.Bottom);
-
-                x -= leftMargin;
-                y -= topMargin;
-                w += leftMargin + rightMargin;
-                h += topMargin + bottomMargin;
             }
 
             SetWindowPos(target, IntPtr.Zero, x, y, w, h, SWP_NOZORDER | SWP_SHOWWINDOW);
             DwmApi.SetForegroundWindow(target);
-            ToastNotification.Show($"✓ Snapped Window: {layout}");
+            ToastNotification.Show($"✓ Snapped: {layout}");
         }
 
         public static void MinimizeAllWindows()
         {
-            var tray = FindWindow("Shell_TrayWnd", null);
+            IntPtr tray = FindWindow("Shell_TrayWnd", null);
             if (tray != IntPtr.Zero)
             {
                 SendMessage(tray, 0x0111, (IntPtr)419, IntPtr.Zero); // MIN_ALL
@@ -206,6 +235,7 @@ namespace Beam.Services
 
         public static List<LauncherItem> GetWindowCommands()
         {
+            var iconPin = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathPin);
             var iconLeft = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathWindowLeft);
             var iconRight = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathWindowRight);
             var iconMax = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathWindowMax);
@@ -213,6 +243,7 @@ namespace Beam.Services
 
             return new List<LauncherItem>
             {
+                new() { Id = "win:pin_top", Name = "Always on Top (Pin Window)", Subtitle = "PowerToys Always on Top — Keep active window pinned above all others", Category = "Window Management", ShortcutBadge = "Pin 📌", Icon = iconPin, Action = () => ToggleAlwaysOnTop() },
                 new() { Id = "win:left", Name = "Left Half", Subtitle = "Window Management — Snap active window to left 50%", Category = "Window Management", ShortcutBadge = "Win+←", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.LeftHalf) },
                 new() { Id = "win:right", Name = "Right Half", Subtitle = "Window Management — Snap active window to right 50%", Category = "Window Management", ShortcutBadge = "Win+→", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.RightHalf) },
                 new() { Id = "win:max", Name = "Maximize Window", Subtitle = "Window Management — Expand active window to full screen", Category = "Window Management", ShortcutBadge = "Win+↑", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.Maximize) },

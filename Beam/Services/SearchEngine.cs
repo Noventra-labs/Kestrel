@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Beam.Models;
 
 namespace Beam.Services
@@ -43,7 +44,7 @@ namespace Beam.Services
                     return existing;
                 });
 
-            SaveFrecency();
+            Task.Run(SaveFrecency);
         }
 
         public static double GetFrecencyBoost(string itemId)
@@ -67,7 +68,6 @@ namespace Beam.Services
         {
             if (string.IsNullOrWhiteSpace(query))
             {
-                // Sort by Frecency first, then keep original category priority
                 return pool
                     .Select((item, idx) => new { Item = item, Score = GetFrecencyBoost(item.Id) - idx * 0.05 })
                     .OrderByDescending(x => x.Score)
@@ -77,12 +77,13 @@ namespace Beam.Services
             }
 
             var q = query.Trim();
+            var lowerQuery = q.ToLowerInvariant();
             var scored = new List<(LauncherItem Item, double Score)>();
 
             foreach (var item in pool)
             {
-                double nameScore = ComputeFuzzyScore(item.Name, q);
-                double catScore = ComputeFuzzyScore(item.Category, q) * 0.45;
+                double nameScore = ComputeFuzzyScoreFast(item.Name, item.LowerName, item.Acronym, q, lowerQuery);
+                double catScore = ComputeFuzzyScoreFast(item.Category, item.LowerCategory, string.Empty, q, lowerQuery) * 0.45;
                 double subScore = item.Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase) ? 65.0 : 0.0;
 
                 double bestMatch = Math.Max(nameScore, Math.Max(catScore, subScore));
@@ -101,31 +102,30 @@ namespace Beam.Services
                 .ToList();
         }
 
-        public static double ComputeFuzzyScore(string target, string query)
+        public static double ComputeFuzzyScoreFast(string target, string lowerTarget, string acronym, string query, string lowerQuery)
         {
             if (string.IsNullOrEmpty(target) || string.IsNullOrEmpty(query))
                 return 0;
 
             // 1. Exact Match
-            if (target.Equals(query, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(lowerTarget, lowerQuery, StringComparison.Ordinal))
                 return 1000.0;
 
             // 2. Exact Prefix Match
-            if (target.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+            if (lowerTarget.StartsWith(lowerQuery, StringComparison.Ordinal))
                 return 650.0 + (20.0 / Math.Max(1, target.Length));
 
-            // 3. Acronym / Initials Match (e.g. "vsc" -> "Visual Studio Code", "lh" -> "Left Half", "wt" -> "Windows Terminal")
-            var acronym = ExtractAcronym(target);
+            // 3. Acronym Match (pre-computed)
             if (acronym.Length >= 2)
             {
-                if (acronym.Equals(query, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(acronym, lowerQuery, StringComparison.Ordinal))
                     return 580.0;
-                if (acronym.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+                if (acronym.StartsWith(lowerQuery, StringComparison.Ordinal))
                     return 480.0;
             }
 
-            // 4. Word-Boundary Prefix Match (e.g. "studio" in "Visual Studio Code")
-            int idx = target.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+            // 4. Word-Boundary Prefix Match
+            int idx = lowerTarget.IndexOf(lowerQuery, StringComparison.Ordinal);
             if (idx > 0)
             {
                 char prev = target[idx - 1];
@@ -136,17 +136,17 @@ namespace Beam.Services
                 return 260.0 - idx;
             }
 
-            // 5. Subsequence Fuzzy Match (all characters of query appear in order in target)
-            if (query.Length >= 2 && query.Length <= target.Length)
+            // 5. Subsequence Fuzzy Match (using lower strings directly, zero allocations)
+            if (lowerQuery.Length >= 2 && lowerQuery.Length <= lowerTarget.Length)
             {
                 int qIdx = 0;
                 int firstMatch = -1;
                 int lastMatch = -1;
                 int wordBoundaryHits = 0;
 
-                for (int tIdx = 0; tIdx < target.Length && qIdx < query.Length; tIdx++)
+                for (int tIdx = 0; tIdx < lowerTarget.Length && qIdx < lowerQuery.Length; tIdx++)
                 {
-                    if (char.ToLowerInvariant(target[tIdx]) == char.ToLowerInvariant(query[qIdx]))
+                    if (lowerTarget[tIdx] == lowerQuery[qIdx])
                     {
                         if (firstMatch == -1) firstMatch = tIdx;
                         lastMatch = tIdx;
@@ -156,12 +156,11 @@ namespace Beam.Services
                     }
                 }
 
-                if (qIdx == query.Length)
+                if (qIdx == lowerQuery.Length)
                 {
                     int span = (lastMatch - firstMatch) + 1;
-                    int gaps = span - query.Length;
-                    // Reject overly scattered subsequence matches
-                    if (gaps <= query.Length * 2)
+                    int gaps = span - lowerQuery.Length;
+                    if (gaps <= lowerQuery.Length * 2)
                     {
                         return Math.Max(40.0, 160.0 + (wordBoundaryHits * 25.0) - (gaps * 12.0) - firstMatch);
                     }
@@ -171,30 +170,16 @@ namespace Beam.Services
             return 0;
         }
 
-        private static string ExtractAcronym(string text)
+        public static double ComputeFuzzyScore(string target, string query)
         {
-            Span<char> buf = stackalloc char[16];
-            int count = 0;
-            bool takeNext = true;
+            if (string.IsNullOrEmpty(target) || string.IsNullOrEmpty(query))
+                return 0;
 
-            for (int i = 0; i < text.Length && count < buf.Length; i++)
-            {
-                char c = text[i];
-                if (c == ' ' || c == '-' || c == '_' || c == '/')
-                {
-                    takeNext = true;
-                }
-                else if (takeNext || (i > 0 && char.IsUpper(c) && char.IsLower(text[i - 1])))
-                {
-                    if (char.IsLetterOrDigit(c))
-                    {
-                        buf[count++] = char.ToLowerInvariant(c);
-                    }
-                    takeNext = false;
-                }
-            }
+            string lowerTarget = target.ToLowerInvariant();
+            string lowerQuery = query.ToLowerInvariant();
+            string acronym = LauncherItem.ComputeAcronym(target);
 
-            return new string(buf[..count]);
+            return ComputeFuzzyScoreFast(target, lowerTarget, acronym, query, lowerQuery);
         }
 
         public static void ClearFrecency()
@@ -215,7 +200,7 @@ namespace Beam.Services
             try
             {
                 if (File.Exists(FrecencyFile))
-                {
+                    {
                     var json = File.ReadAllText(FrecencyFile);
                     var dict = JsonSerializer.Deserialize<Dictionary<string, UsageRecord>>(json);
                     if (dict != null)
@@ -243,4 +228,3 @@ namespace Beam.Services
         }
     }
 }
-
