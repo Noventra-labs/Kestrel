@@ -172,6 +172,23 @@ namespace Beam
             RefreshInstalledAppsAsync();
             AppScanner.StartWatchingChanges(RefreshInstalledAppsAsync);
 
+            // Check for updates in the background without affecting startup performance
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(4000);
+                var info = await UpdateService.CheckForUpdatesAsync();
+                if (info != null && info.IsNewer)
+                {
+                    _ = Dispatcher.BeginInvoke(() =>
+                    {
+                        UpdateBadge.Visibility = Visibility.Visible;
+                        UpdateVersionText.Text = info.LatestTag;
+                        TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
+                        BtnCheckUpdatesText.Text = "Update Now";
+                    });
+                }
+            });
+
             SearchBox.Focus();
             Keyboard.Focus(SearchBox);
         }
@@ -1458,6 +1475,31 @@ namespace Beam
         private void NoventraLink_Click(object sender, MouseButtonEventArgs e)
         {
             AppScanner.LaunchFile("https://github.com/Noventra-labs/Kestrel");
+        }
+
+        private void UpdateBadge_Click(object sender, MouseButtonEventArgs e)
+        {
+            UpdateService.OpenReleasePage();
+        }
+
+        private async void CheckUpdates_Click(object sender, MouseButtonEventArgs e)
+        {
+            BtnCheckUpdatesText.Text = "Checking...";
+            var info = await UpdateService.CheckForUpdatesAsync(force: true);
+            if (info != null && info.IsNewer)
+            {
+                TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
+                BtnCheckUpdatesText.Text = "Update Now";
+                UpdateBadge.Visibility = Visibility.Visible;
+                UpdateVersionText.Text = info.LatestTag;
+                UpdateService.OpenReleasePage(string.IsNullOrEmpty(info.InstallerUrl) ? info.HtmlUrl : info.InstallerUrl);
+            }
+            else
+            {
+                TxtUpdateStatus.Text = $"Kestrel is up to date (v{UpdateService.CurrentVersion})";
+                BtnCheckUpdatesText.Text = "Up to Date ✓";
+                ToastNotification.Show("✓ Kestrel is running the latest version");
+            }
         }
 
         #endregion

@@ -409,6 +409,21 @@
                                        Foreground="{StaticResource TextSecondary}"
                                        FontSize="12"
                                        VerticalAlignment="Center" />
+                            <Border x:Name="UpdateBadge"
+                                    Visibility="Collapsed"
+                                    Background="#2A1B0E"
+                                    BorderBrush="#F59E0B"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="8,2"
+                                    Margin="12,0,0,0"
+                                    Cursor="Hand"
+                                    MouseLeftButtonDown="UpdateBadge_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="⚡ Update Available: " Foreground="#F59E0B" FontSize="11" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="UpdateVersionText" Text="v2.3.2" Foreground="#FDE68A" FontSize="11" FontWeight="Bold" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <!-- Right Action Hints -->
@@ -757,13 +772,27 @@
                                 </Grid>
                             </Border>
 
-                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11" Margin="0,0,0,18">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
                                         <TextBlock Text="Low-Memory Background Mode" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
                                         <TextBlock Text="Trim working set memory when idle in system tray" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkTrimMemory" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Text="UPDATES" Foreground="#6B7280" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
+
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,11">
+                                <Grid>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,140,0">
+                                        <TextBlock Text="Software Updates" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.3.1)" Foreground="#6B7280" FontSize="11.5" Margin="0,1,0,0" />
+                                    </StackPanel>
+                                    <Border HorizontalAlignment="Right" Background="#1F2533" BorderBrush="#31394D" BorderThickness="1" CornerRadius="6" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="CheckUpdates_Click">
+                                        <TextBlock x:Name="BtnCheckUpdatesText" Text="Check for Updates" Foreground="#F3F4F6" FontSize="11.5" FontWeight="SemiBold" />
+                                    </Border>
                                 </Grid>
                             </Border>
                         </StackPanel>

@@ -404,26 +404,58 @@ namespace Beam.Services
         {
             try
             {
+                // 1. Direct URI protocol launch (e.g. ms-windows-store:, ms-settings:)
                 if (aumid.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
                 {
-                    var uriPsi = new ProcessStartInfo(aumid)
-                    {
-                        UseShellExecute = true
-                    };
-                    Process.Start(uriPsi);
+                    Process.Start(new ProcessStartInfo(aumid) { UseShellExecute = true });
                     return;
                 }
 
-                var psi = new ProcessStartInfo
+                // If Microsoft Store AUMID, prefer direct ms-windows-store: protocol
+                if (aumid.Contains("WindowsStore", StringComparison.OrdinalIgnoreCase))
                 {
-                    FileName = "explorer.exe",
-                    Arguments = aumid.StartsWith("shell:AppsFolder\\", StringComparison.OrdinalIgnoreCase)
-                        ? aumid
-                        : $@"shell:AppsFolder\{aumid}",
-                    UseShellExecute = true,
-                    CreateNoWindow = true
-                };
-                Process.Start(psi);
+                    Process.Start(new ProcessStartInfo("ms-windows-store:") { UseShellExecute = true });
+                    return;
+                }
+
+                // 2. Direct ShellExecute on shell:AppsFolder without spawning secondary explorer.exe process
+                string target = aumid.StartsWith("shell:AppsFolder\\", StringComparison.OrdinalIgnoreCase)
+                    ? aumid
+                    : $@"shell:AppsFolder\{aumid}";
+
+                try
+                {
+                    var psi = new ProcessStartInfo(target)
+                    {
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                    return;
+                }
+                catch { }
+
+                // 3. Fallback: Native Shell.Application COM FolderItem InvokeVerb
+                try
+                {
+                    var shellType = Type.GetTypeFromProgID("Shell.Application");
+                    if (shellType != null)
+                    {
+                        dynamic shell = Activator.CreateInstance(shellType)!;
+                        dynamic appsFolder = shell.NameSpace("shell:AppsFolder");
+                        if (appsFolder != null)
+                        {
+                            foreach (var item in appsFolder.Items())
+                            {
+                                if (string.Equals((string)item.Path, aumid, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    item.InvokeVerb();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
             }
             catch (Exception ex)
             {
