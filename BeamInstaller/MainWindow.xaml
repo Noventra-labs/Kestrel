@@ -121,7 +121,7 @@
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="Kestrel" Foreground="#F9FAFB" FontSize="19" FontWeight="Bold" />
                                 <Border Background="#1C202C" BorderBrush="#2B3142" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="v2.3.0" Foreground="#9CA3AF" FontSize="10.5" FontWeight="SemiBold" />
+                                    <TextBlock Text="v2.3.1" Foreground="#9CA3AF" FontSize="10.5" FontWeight="SemiBold" />
                                 </Border>
                             </StackPanel>
                             <TextBlock Text="Fast, native command bar and launcher for Windows." Foreground="#9CA3AF" FontSize="12" Margin="0,2,0,0" />

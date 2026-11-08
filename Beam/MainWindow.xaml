@@ -999,7 +999,7 @@
                 <!-- Row 2: Minimal Footer -->
                 <Border Grid.Row="2" Background="#0D0F14" BorderThickness="0,1,0,0" BorderBrush="#1E222D" Padding="20,0">
                     <Grid VerticalAlignment="Center">
-                        <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.3.0 • Noventra Labs" Foreground="#6B7280" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
+                        <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.3.1 • Noventra Labs" Foreground="#6B7280" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
                         <Border HorizontalAlignment="Right"
                                 Background="{StaticResource BrandRed}"
                                 CornerRadius="6"

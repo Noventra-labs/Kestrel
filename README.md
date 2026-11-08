@@ -1,4 +1,4 @@
-# Kestrel for Windows (v2.3.0)
+# Kestrel for Windows (v2.3.1)
 **Published by Noventra Labs** • [GitHub Repository](https://github.com/Noventra-labs/Kestrel)
 
 Kestrel is a native Windows 11 command bar, launcher, window manager, clipboard vault, local file indexer, Mem Reduct system RAM cleaner, Microsoft PowerToys suite, and embedded Google Gemini AI suite engineered with .NET 10 WPF, Win32 DWM Acrylic/Mica, and a cloud-ready FastAPI + Supabase backend.
