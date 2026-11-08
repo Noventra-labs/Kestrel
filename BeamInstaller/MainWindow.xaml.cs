@@ -269,7 +269,7 @@ namespace BeamInstaller
                         {
                             unKey.SetValue("DisplayName", "Kestrel", RegistryValueKind.String);
                             unKey.SetValue("Publisher", "Noventra Labs", RegistryValueKind.String);
-                            unKey.SetValue("DisplayVersion", "2.3.0", RegistryValueKind.String);
+                            unKey.SetValue("DisplayVersion", "2.3.1", RegistryValueKind.String);
                             unKey.SetValue("DisplayIcon", targetIco, RegistryValueKind.String);
                             unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                             unKey.SetValue("UninstallString", $"\"{uninstallerPath}\" --uninstall", RegistryValueKind.String);
@@ -374,10 +374,17 @@ namespace BeamInstaller
                 try
                 {
                     string deskDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                    string altDeskDir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
                     foreach (var fn in new[] { "Kestrel.lnk", "Beam.lnk" })
                     {
-                        string p = Path.Combine(deskDir, fn);
-                        if (File.Exists(p)) File.Delete(p);
+                        foreach (var d in new[] { deskDir, altDeskDir })
+                        {
+                            if (!string.IsNullOrEmpty(d))
+                            {
+                                string p = Path.Combine(d, fn);
+                                if (File.Exists(p)) File.Delete(p);
+                            }
+                        }
                     }
 
                     string startPrograms = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
@@ -388,6 +395,14 @@ namespace BeamInstaller
                         if (File.Exists(p1)) File.Delete(p1);
                         if (File.Exists(p2)) File.Delete(p2);
                     }
+
+                    string noventraFolder = Path.Combine(startPrograms, "Noventra Labs");
+                    if (Directory.Exists(noventraFolder) && Directory.GetFiles(noventraFolder).Length == 0)
+                    {
+                        try { Directory.Delete(noventraFolder); } catch { }
+                    }
+
+                    ShortcutHelper.NotifyShell();
                 }
                 catch { }
 
@@ -399,6 +414,32 @@ namespace BeamInstaller
                     runKey?.DeleteValue("BeamLauncher", false);
                     Registry.CurrentUser.DeleteSubKeyTree(UninstallRegKey, false);
                     Registry.CurrentUser.DeleteSubKeyTree(LegacyUninstallRegKey, false);
+                }
+                catch { }
+
+                // Schedule deletion of installation folder after process exit
+                try
+                {
+                    string installDir = TxtInstallDir.Text.Trim();
+                    if (string.IsNullOrWhiteSpace(installDir))
+                    {
+                        installDir = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "Programs",
+                            "Kestrel");
+                    }
+
+                    if (Directory.Exists(installDir))
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "cmd.exe",
+                            Arguments = $"/c timeout /t 1 /nobreak >nul & rmdir /s /q \"{installDir}\"",
+                            CreateNoWindow = true,
+                            WindowStyle = ProcessWindowStyle.Hidden,
+                            UseShellExecute = true
+                        });
+                    }
                 }
                 catch { }
 
