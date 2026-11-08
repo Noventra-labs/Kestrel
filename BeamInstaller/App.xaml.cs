@@ -12,7 +12,8 @@ namespace BeamInstaller
 
             bool isUninstall = e.Args.Any(a =>
                 a.Equals("--uninstall", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase));
+                a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase))
+                || (Environment.ProcessPath?.Contains("uninstall", StringComparison.OrdinalIgnoreCase) == true);
 
             bool isSilent = e.Args.Any(a =>
                 a.Equals("--silent", StringComparison.OrdinalIgnoreCase) ||

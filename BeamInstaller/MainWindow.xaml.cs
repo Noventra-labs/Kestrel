@@ -343,16 +343,19 @@ namespace BeamInstaller
 
         private async Task RunUninstallerFlowAsync()
         {
-            var confirm = System.Windows.MessageBox.Show(
-                "Uninstall Kestrel from your computer?",
-                "Uninstall Kestrel",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (confirm != MessageBoxResult.Yes)
+            if (!_isSilentMode)
             {
-                Close();
-                return;
+                var confirm = System.Windows.MessageBox.Show(
+                    "Uninstall Kestrel from your computer?",
+                    "Uninstall Kestrel",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (confirm != MessageBoxResult.Yes)
+                {
+                    Close();
+                    return;
+                }
             }
 
             ShowStep(2);
