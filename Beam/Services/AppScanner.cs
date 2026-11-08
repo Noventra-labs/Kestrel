@@ -65,7 +65,7 @@ namespace Beam.Services
                 {
                     var json = File.ReadAllText(CacheFile);
                     var cached = JsonSerializer.Deserialize<List<CachedAppRecord>>(json);
-                    if (cached != null && cached.Count > 0)
+                    if (cached != null && cached.Count > 0 && cached.Any(c => c.Path.Contains("!")))
                     {
                         return ReconstructFromCache(cached);
                     }
@@ -128,6 +128,9 @@ namespace Beam.Services
                 catch { }
             }
 
+            // Scan modern packaged apps from Microsoft Store / Windows UWP
+            ScanStoreApps(list, cacheRecords, scannedNames);
+
             // Persist app index cache asynchronously
             Task.Run(() =>
             {
@@ -147,6 +150,85 @@ namespace Beam.Services
             return list;
         }
 
+        private static void ScanStoreApps(List<LauncherItem> list, List<CachedAppRecord> cacheRecords, HashSet<string> scannedNames)
+        {
+            try
+            {
+                var storeApps = StaWorker.Run(EnumerateStoreAppsInternal);
+                foreach (var app in storeApps)
+                {
+                    if (scannedNames.Add(app.Name))
+                    {
+                        var icon = ShellIconHelper.GetUwpIcon(app.Aumid);
+                        string aumid = app.Aumid;
+
+                        cacheRecords.Add(new CachedAppRecord
+                        {
+                            Name = app.Name,
+                            Path = aumid,
+                            Subtitle = "Windows App",
+                            Category = "Application"
+                        });
+
+                        list.Add(new LauncherItem
+                        {
+                            Id = "app:" + app.Name.ToLowerInvariant(),
+                            Name = app.Name,
+                            Subtitle = "Windows App",
+                            Category = "Application",
+                            Icon = icon,
+                            Path = aumid,
+                            IsAdminCapable = false,
+                            Action = () => LaunchUwpApp(aumid)
+                        });
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static List<(string Name, string Aumid)> EnumerateStoreAppsInternal()
+        {
+            var result = new List<(string Name, string Aumid)>();
+            try
+            {
+                var shellType = Type.GetTypeFromProgID("Shell.Application");
+                if (shellType == null) return result;
+
+                dynamic shell = Activator.CreateInstance(shellType)!;
+                dynamic appsFolder = shell.NameSpace("shell:AppsFolder");
+                if (appsFolder == null) return result;
+
+                foreach (var item in appsFolder.Items())
+                {
+                    try
+                    {
+                        string name = item.Name;
+                        string path = item.Path;
+
+                        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path))
+                            continue;
+
+                        // Only target packaged UWP/MSIX apps (AUMID contains '!')
+                        if (!path.Contains("!"))
+                            continue;
+
+                        // Skip uninstalled placeholders, resource strings, or uninstallers
+                        if (name.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) ||
+                            name.StartsWith("@{", StringComparison.OrdinalIgnoreCase) ||
+                            name.Contains("uninstall", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        result.Add((name, path));
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            return result;
+        }
+
         private static List<LauncherItem> ReconstructFromCache(List<CachedAppRecord> records)
         {
             var list = new List<LauncherItem>(records.Count + 20);
@@ -154,11 +236,14 @@ namespace Beam.Services
 
             foreach (var r in records)
             {
-                if (!File.Exists(r.Path)) continue;
+                bool isUwp = r.Path.Contains("!") || r.Path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || r.Path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase);
+                if (!isUwp && !File.Exists(r.Path)) continue;
                 if (!scannedNames.Add(r.Name)) continue;
 
                 var icon = ShellIconHelper.GetIcon(r.Path);
                 string pathCopy = r.Path;
+                bool isUwpApp = isUwp;
+
                 list.Add(new LauncherItem
                 {
                     Id = "app:" + r.Name.ToLowerInvariant(),
@@ -167,8 +252,18 @@ namespace Beam.Services
                     Category = r.Category,
                     Icon = icon,
                     Path = pathCopy,
-                    IsAdminCapable = true,
-                    Action = () => LaunchFile(pathCopy)
+                    IsAdminCapable = !isUwpApp,
+                    Action = () =>
+                    {
+                        if (isUwpApp)
+                        {
+                            LaunchUwpApp(pathCopy);
+                        }
+                        else
+                        {
+                            LaunchFile(pathCopy);
+                        }
+                    }
                 });
             }
 
@@ -195,6 +290,7 @@ namespace Beam.Services
                 ("Task Manager", @"C:\Windows\System32\taskmgr.exe", "Application", "taskmgr.exe"),
                 ("Windows Terminal", "wt.exe", "Application", "Windows Terminal (wt.exe)"),
                 ("Windows Settings", "ms-settings:", "System Preference", "System Settings (ms-settings:)"),
+                ("Microsoft Store", "ms-windows-store:", "Application", "Microsoft Store (ms-windows-store:)"),
                 ("File Explorer", @"C:\Windows\explorer.exe", "Application", "explorer.exe"),
                 ("Notepad", @"C:\Windows\System32\notepad.exe", "Application", "notepad.exe"),
                 ("Calculator", @"C:\Windows\System32\calc.exe", "Application", "calc.exe"),
@@ -221,6 +317,10 @@ namespace Beam.Services
                     {
                         icon = IconGenerator.GetSquircleIcon(SquircleTheme.TerminalSlate, IconGenerator.PathTerminal, asStroke: true);
                     }
+                    else if (tool.Path.StartsWith("ms-windows-store:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        icon = ShellIconHelper.GetUwpIcon("Microsoft.WindowsStore_8wekyb3d8bbwe!App");
+                    }
                     else if (File.Exists(tool.Path))
                     {
                         icon = ShellIconHelper.GetIcon(tool.Path);
@@ -238,7 +338,7 @@ namespace Beam.Services
                         Category = tool.Category,
                         Icon = icon,
                         Path = tool.Path,
-                        IsAdminCapable = true,
+                        IsAdminCapable = !tool.Path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase),
                         Action = () =>
                         {
                             if (isAdminTarget)
@@ -255,10 +355,47 @@ namespace Beam.Services
             }
         }
 
+        public static void LaunchUwpApp(string aumid)
+        {
+            try
+            {
+                if (aumid.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uriPsi = new ProcessStartInfo(aumid)
+                    {
+                        UseShellExecute = true
+                    };
+                    Process.Start(uriPsi);
+                    return;
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = aumid.StartsWith("shell:AppsFolder\\", StringComparison.OrdinalIgnoreCase)
+                        ? aumid
+                        : $@"shell:AppsFolder\{aumid}",
+                    UseShellExecute = true,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show("Failed to launch application: " + ex.Message, "Kestrel", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         public static void LaunchFile(string path)
         {
             try
             {
+                if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                {
+                    LaunchUwpApp(path);
+                    return;
+                }
+
                 var psi = new ProcessStartInfo(path)
                 {
                     UseShellExecute = true
@@ -275,6 +412,13 @@ namespace Beam.Services
         {
             try
             {
+                if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Packaged / UWP apps run inside an AppContainer sandbox and cannot be elevated via Win32 'runas'
+                    LaunchUwpApp(path);
+                    return;
+                }
+
                 var psi = new ProcessStartInfo(path)
                 {
                     UseShellExecute = true,
@@ -292,6 +436,12 @@ namespace Beam.Services
         {
             try
             {
+                if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                {
+                    Process.Start("explorer.exe", "shell:AppsFolder");
+                    return;
+                }
+
                 if (File.Exists(path) || Directory.Exists(path))
                 {
                     Process.Start("explorer.exe", $"/select,\"{path}\"");
@@ -303,7 +453,7 @@ namespace Beam.Services
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show("Failed to reveal file: " + ex.Message, "Beam", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show("Failed to reveal file: " + ex.Message, "Kestrel", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
     }

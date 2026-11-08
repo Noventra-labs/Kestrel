@@ -74,6 +74,17 @@ namespace Beam.Interop
         [DllImport("shell32.dll", EntryPoint = "#727")]
         private static extern int SHGetImageList(int iImageList, ref Guid riid, out IImageList ppv);
 
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        private static extern void SHCreateItemFromParsingName(
+            [MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+            IntPtr pbc,
+            [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+            [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory ppv);
+
+        [DllImport("gdi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool DeleteObject(IntPtr hObject);
+
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool DestroyIcon(IntPtr hIcon);
@@ -103,6 +114,26 @@ namespace Beam.Interop
             [PreserveSig] int Draw(IntPtr pimldp);
             [PreserveSig] int Remove(int i);
             [PreserveSig] int GetIcon(int i, int flags, out IntPtr picon);
+        }
+
+        [ComImport]
+        [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IShellItemImageFactory
+        {
+            [PreserveSig]
+            int GetImage(
+                [In] SIZE size,
+                [In] int flags,
+                [Out] out IntPtr phbm);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SIZE
+        {
+            public int cx;
+            public int cy;
+            public SIZE(int x, int y) { cx = x; cy = y; }
         }
 
         private const uint SHGFI_ICON = 0x000000100;
@@ -190,11 +221,83 @@ namespace Beam.Interop
             if (IconCache.TryGetValue(path, out var cached))
                 return cached;
 
+            if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase))
+            {
+                return GetUwpIcon(path);
+            }
+
             var extracted = ExtractHighDpiIcon(path)
                             ?? IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathTerminal);
 
             IconCache[path] = extracted;
             return extracted;
+        }
+
+        public static ImageSource GetUwpIcon(string aumid)
+        {
+            if (string.IsNullOrWhiteSpace(aumid))
+                return IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathTerminal);
+
+            if (IconCache.TryGetValue(aumid, out var cached))
+                return cached;
+
+            var extracted = ExtractUwpIcon(aumid)
+                            ?? IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathTerminal);
+
+            IconCache[aumid] = extracted;
+            return extracted;
+        }
+
+        public static ImageSource? ExtractUwpIcon(string aumid)
+        {
+            try
+            {
+                return StaWorker.Run(() => ExtractUwpIconInternal(aumid));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static ImageSource? ExtractUwpIconInternal(string aumid)
+        {
+            try
+            {
+                string parsingName = aumid.StartsWith("shell:AppsFolder\\", StringComparison.OrdinalIgnoreCase)
+                    ? aumid
+                    : @"shell:AppsFolder\" + aumid;
+
+                var guid = new Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"); // IShellItemImageFactory
+                SHCreateItemFromParsingName(parsingName, IntPtr.Zero, guid, out var factory);
+                if (factory != null)
+                {
+                    var size = new SIZE(32, 32);
+                    int hr = factory.GetImage(size, 0x0, out var hBitmap);
+                    if (hr == 0 && hBitmap != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            var bs = Imaging.CreateBitmapSourceFromHBitmap(
+                                hBitmap,
+                                IntPtr.Zero,
+                                Int32Rect.Empty,
+                                BitmapSizeOptions.FromEmptyOptions());
+                            bs.Freeze();
+                            return bs;
+                        }
+                        finally
+                        {
+                            DeleteObject(hBitmap);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
         }
 
         private static ImageSource? ExtractHighDpiIcon(string path)
