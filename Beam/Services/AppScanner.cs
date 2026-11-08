@@ -17,6 +17,7 @@ namespace Beam.Services
         public string Path { get; set; } = string.Empty;
         public string Subtitle { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
+        public string Keywords { get; set; } = string.Empty;
     }
 
     public static class AppScanner
@@ -162,12 +163,19 @@ namespace Beam.Services
                         var icon = ShellIconHelper.GetUwpIcon(app.Aumid);
                         string aumid = app.Aumid;
 
+                        string keywords = "app store windows app uwp msix";
+                        if (app.Name.Equals("Microsoft Store", StringComparison.OrdinalIgnoreCase) || aumid.Contains("WindowsStore", StringComparison.OrdinalIgnoreCase))
+                        {
+                            keywords = "store app appstore shop market windows store uwp download software microsoft buy";
+                        }
+
                         cacheRecords.Add(new CachedAppRecord
                         {
                             Name = app.Name,
                             Path = aumid,
                             Subtitle = "Windows App",
-                            Category = "Application"
+                            Category = "Application",
+                            Keywords = keywords
                         });
 
                         list.Add(new LauncherItem
@@ -176,6 +184,7 @@ namespace Beam.Services
                             Name = app.Name,
                             Subtitle = "Windows App",
                             Category = "Application",
+                            Keywords = keywords,
                             Icon = icon,
                             Path = aumid,
                             IsAdminCapable = false,
@@ -244,12 +253,26 @@ namespace Beam.Services
                 string pathCopy = r.Path;
                 bool isUwpApp = isUwp;
 
+                string kw = r.Keywords;
+                if (string.IsNullOrEmpty(kw))
+                {
+                    if (r.Name.Equals("Microsoft Store", StringComparison.OrdinalIgnoreCase) || r.Path.Contains("WindowsStore", StringComparison.OrdinalIgnoreCase))
+                    {
+                        kw = "store app appstore shop market windows store uwp download software microsoft buy";
+                    }
+                    else if (r.Subtitle.Equals("Windows App", StringComparison.OrdinalIgnoreCase) || r.Path.Contains("!"))
+                    {
+                        kw = "app store windows app uwp msix";
+                    }
+                }
+
                 list.Add(new LauncherItem
                 {
                     Id = "app:" + r.Name.ToLowerInvariant(),
                     Name = r.Name,
                     Subtitle = r.Subtitle,
                     Category = r.Category,
+                    Keywords = kw ?? string.Empty,
                     Icon = icon,
                     Path = pathCopy,
                     IsAdminCapable = !isUwpApp,
@@ -336,6 +359,7 @@ namespace Beam.Services
                         Name = tool.Name,
                         Subtitle = tool.Subtitle,
                         Category = tool.Category,
+                        Keywords = GetSystemToolKeywords(tool.Name, tool.Path),
                         Icon = icon,
                         Path = tool.Path,
                         IsAdminCapable = !tool.Path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase),
@@ -353,6 +377,27 @@ namespace Beam.Services
                     });
                 }
             }
+        }
+
+        private static string GetSystemToolKeywords(string name, string path)
+        {
+            if (name.Equals("Microsoft Store", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-windows-store:", StringComparison.OrdinalIgnoreCase))
+                return "store app appstore shop market windows store uwp download software microsoft buy";
+            if (name.Contains("Settings") || path.StartsWith("ms-settings:", StringComparison.OrdinalIgnoreCase))
+                return "settings system control preferences configure config options";
+            if (name.Contains("Calculator") || path.Contains("calc"))
+                return "calculator calc math calculate compute arithmetic";
+            if (name.Contains("Task Manager") || path.Contains("taskmgr"))
+                return "task manager taskmgr activity performance kill processes monitor";
+            if (name.Contains("Notepad"))
+                return "notepad text editor notes";
+            if (name.Contains("Command Prompt") || path.Contains("cmd"))
+                return "cmd command prompt terminal console admin";
+            if (name.Contains("PowerShell"))
+                return "powershell pwsh terminal console admin scripting";
+            if (name.Contains("Terminal"))
+                return "terminal wt console bash cmd prompt powershell";
+            return string.Empty;
         }
 
         public static void LaunchUwpApp(string aumid)

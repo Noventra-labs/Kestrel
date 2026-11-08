@@ -7,6 +7,8 @@ namespace Beam.Models
     {
         private string _name = string.Empty;
         private string _category = "Application";
+        private string _subtitle = string.Empty;
+        private string _keywords = string.Empty;
 
         public string Id { get; set; } = string.Empty;
 
@@ -18,13 +20,41 @@ namespace Beam.Models
                 _name = value ?? string.Empty;
                 LowerName = _name.ToLowerInvariant();
                 Acronym = ComputeAcronym(_name);
+                NameWords = SplitWords(LowerName);
             }
         }
 
         public string LowerName { get; private set; } = string.Empty;
         public string Acronym { get; private set; } = string.Empty;
+        public string[] NameWords { get; private set; } = Array.Empty<string>();
 
-        public string Subtitle { get; set; } = string.Empty;
+        public string Subtitle
+        {
+            get => _subtitle;
+            set
+            {
+                _subtitle = value ?? string.Empty;
+                LowerSubtitle = _subtitle.ToLowerInvariant();
+                SubtitleWords = SplitWords(LowerSubtitle);
+            }
+        }
+
+        public string LowerSubtitle { get; private set; } = string.Empty;
+        public string[] SubtitleWords { get; private set; } = Array.Empty<string>();
+
+        public string Keywords
+        {
+            get => _keywords;
+            set
+            {
+                _keywords = value ?? string.Empty;
+                LowerKeywords = _keywords.ToLowerInvariant();
+                KeywordWords = SplitWords(LowerKeywords);
+            }
+        }
+
+        public string LowerKeywords { get; private set; } = string.Empty;
+        public string[] KeywordWords { get; private set; } = Array.Empty<string>();
 
         public string Category
         {
@@ -44,6 +74,14 @@ namespace Beam.Models
         public string Path { get; set; } = string.Empty;
         public bool IsAdminCapable { get; set; } = false;
         public bool KeepOpenOnExecute { get; set; } = false;
+
+        private static readonly char[] WordSeparators = new[] { ' ', '-', '_', '.', '(', ')', '[', ']', '/', '\\', ':', ';', ',' };
+
+        public static string[] SplitWords(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return Array.Empty<string>();
+            return text.Split(WordSeparators, StringSplitOptions.RemoveEmptyEntries);
+        }
 
         public static string ComputeAcronym(string text)
         {

@@ -16,7 +16,7 @@ namespace Beam.Interop
         private const ushort VK_LWIN = 0x5B;
         private const ushort VK_RWIN = 0x5C;
         private const int VK_MENU = 0x12; // Alt key
-        private const ushort VK_LCONTROL = 0xA2; // Left Control used to mask Start Menu chord in Windows Shell
+        private const ushort VK_MASK_E8 = 0xE8; // Unassigned virtual key used to cancel Windows Start Menu chord
 
         private const uint INPUT_KEYBOARD = 1;
         private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -217,6 +217,16 @@ namespace Beam.Interop
                                 _winKeyDownAlone = true;
                                 // Capture active app window BEFORE Windows Shell reacts
                                 CaptureActiveWindow();
+
+                                // Mask Start Menu immediately on KeyDown!
+                                // By injecting an unassigned virtual key (0xE8) while the Windows key is down,
+                                // Windows Shell registers that a companion key was pressed and clears its internal
+                                // standalone Start Menu flag (fWinKey = false). When the Windows key is subsequently released,
+                                // Windows Shell will NOT open the Start Menu.
+                                var mask = new INPUT[2];
+                                mask[0] = CreateKeyInput(VK_MASK_E8, false, EXTRA_INFO_SIGNATURE);
+                                mask[1] = CreateKeyInput(VK_MASK_E8, true, EXTRA_INFO_SIGNATURE);
+                                SendInput((uint)mask.Length, mask, Marshal.SizeOf<INPUT>());
                             }
                         }
                         else if (isKeyUp)
@@ -227,22 +237,10 @@ namespace Beam.Interop
 
                             if (wasAlone)
                             {
-                                // 1. Synthesize neutral Left Control (0xA2) Down + Up with hardware scan code
-                                //    BEFORE releasing Win key. Windows Shell intercepts this chord (Win + Ctrl)
-                                //    and suppresses the Start Menu opening sequence.
-                                // 2. Follow with synthetic Win Up stamped with EXTRA_INFO_SIGNATURE so the OS
-                                //    modifier table cleanly releases the Win key state without triggering Start Menu.
-                                var inputs = new INPUT[3];
-                                inputs[0] = CreateKeyInput(VK_LCONTROL, false, EXTRA_INFO_SIGNATURE);
-                                inputs[1] = CreateKeyInput(VK_LCONTROL, true, EXTRA_INFO_SIGNATURE);
-                                inputs[2] = CreateKeyInput((ushort)kbd.vkCode, true, EXTRA_INFO_SIGNATURE);
-                                SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-
-                                // 3. Trigger Kestrel launcher
+                                // Trigger Kestrel launcher. Because Windows Shell already registered the 0xE8 chord
+                                // during KeyDown, letting the physical Win Up event pass through cleanly updates the
+                                // OS modifier table without ever popping up the Start Menu.
                                 _onTrigger?.Invoke();
-
-                                // 4. Swallow the raw physical Win Up so explorer.exe never opens Start Menu
-                                return (IntPtr)1;
                             }
                         }
                     }

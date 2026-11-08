@@ -218,7 +218,11 @@ namespace BeamInstaller
                     if (createShortcuts)
                     {
                         UpdateProgress("Creating Desktop & Start Menu shortcuts...", 85);
-                        string deskPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Kestrel.lnk");
+
+                        // Desktop shortcut
+                        string deskDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                        if (string.IsNullOrEmpty(deskDir)) deskDir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                        string deskPath = Path.Combine(deskDir, "Kestrel.lnk");
                         ShortcutHelper.CreateShortcut(
                             deskPath,
                             targetExe,
@@ -226,10 +230,18 @@ namespace BeamInstaller
                             "Kestrel — Fast Command Bar for Windows",
                             targetIco);
 
+                        // Start Menu Programs root shortcut (Appears under 'K' in Windows 11 Start Menu)
                         string startPrograms = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
-                        string noventraFolder = Path.Combine(startPrograms, "Noventra Labs");
-                        Directory.CreateDirectory(noventraFolder);
+                        string rootLnk = Path.Combine(startPrograms, "Kestrel.lnk");
+                        ShortcutHelper.CreateShortcut(
+                            rootLnk,
+                            targetExe,
+                            installDir,
+                            "Kestrel — Fast Command Bar for Windows",
+                            targetIco);
 
+                        // Publisher subfolder shortcut (Appears under 'N' for Noventra Labs)
+                        string noventraFolder = Path.Combine(startPrograms, "Noventra Labs");
                         ShortcutHelper.CreateShortcut(
                             Path.Combine(noventraFolder, "Kestrel.lnk"),
                             targetExe,
@@ -237,12 +249,8 @@ namespace BeamInstaller
                             "Kestrel — Fast Command Bar for Windows",
                             targetIco);
 
-                        ShortcutHelper.CreateShortcut(
-                            Path.Combine(startPrograms, "Kestrel.lnk"),
-                            targetExe,
-                            installDir,
-                            "Kestrel — Fast Command Bar for Windows",
-                            targetIco);
+                        // Flush Windows Shell cache immediately
+                        ShortcutHelper.NotifyShell();
                     }
 
                     if (launchOnBoot)
