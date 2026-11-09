@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using Microsoft.Win32;
 using Beam.Services;
 
 namespace Beam
@@ -142,9 +143,62 @@ namespace Beam
                             ico);
                         Beam.Interop.ShortcutHelper.NotifyShell();
                     }
+
+                    EnsureInstalledAppsRegistration(exe, workDir, ico);
                 }
                 catch { }
             });
+        }
+
+        private static void EnsureInstalledAppsRegistration(string exePath, string installDir, string iconPath)
+        {
+            try
+            {
+                const string uninstallRegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Kestrel_NoventraLabs";
+                string uninstallerPath = Path.Combine(installDir, "Uninstall-Kestrel.exe");
+                if (!File.Exists(uninstallerPath))
+                {
+                    uninstallerPath = exePath;
+                }
+
+                long totalBytes = 0;
+                try
+                {
+                    if (Directory.Exists(installDir))
+                    {
+                        var di = new DirectoryInfo(installDir);
+                        foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
+                        {
+                            totalBytes += f.Length;
+                        }
+                    }
+                }
+                catch { }
+                int estimatedSizeKb = (int)Math.Max(1024, totalBytes / 1024);
+
+                using var unKey = Registry.CurrentUser.CreateSubKey(uninstallRegKey);
+                if (unKey != null)
+                {
+                    unKey.SetValue("DisplayName", "Kestrel", RegistryValueKind.String);
+                    unKey.SetValue("Publisher", "Noventra-Labs", RegistryValueKind.String);
+                    unKey.SetValue("DisplayVersion", "2.3.1", RegistryValueKind.String);
+                    unKey.SetValue("DisplayIcon", File.Exists(iconPath) ? iconPath : exePath, RegistryValueKind.String);
+                    unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
+                    unKey.SetValue("UninstallString", $"\"{uninstallerPath}\" --uninstall", RegistryValueKind.String);
+                    unKey.SetValue("QuietUninstallString", $"\"{uninstallerPath}\" --uninstall --silent", RegistryValueKind.String);
+                    unKey.SetValue("EstimatedSize", estimatedSizeKb, RegistryValueKind.DWord);
+                    unKey.SetValue("NoModify", 1, RegistryValueKind.DWord);
+                    unKey.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+                    unKey.SetValue("HelpLink", "https://github.com/Noventra-labs/Kestrel", RegistryValueKind.String);
+                    unKey.SetValue("URLInfoAbout", "https://github.com/Noventra-labs/Kestrel", RegistryValueKind.String);
+                    unKey.SetValue("URLUpdateInfo", "https://github.com/Noventra-labs/Kestrel/releases", RegistryValueKind.String);
+                    unKey.SetValue("Comments", "Fast, keyboard-first Raycast alternative for Windows 11", RegistryValueKind.String);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to ensure Installed Apps registration: {ex.Message}");
+            }
         }
 
         protected override void OnExit(ExitEventArgs e)

@@ -288,12 +288,14 @@ namespace BeamInstaller
                             unKey.SetValue("DisplayIcon", targetIco, RegistryValueKind.String);
                             unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                             unKey.SetValue("UninstallString", $"\"{uninstallerPath}\" --uninstall", RegistryValueKind.String);
-                            unKey.SetValue("EstimatedSize", 2048, RegistryValueKind.DWord);
+                            unKey.SetValue("QuietUninstallString", $"\"{uninstallerPath}\" --uninstall --silent", RegistryValueKind.String);
+                            unKey.SetValue("EstimatedSize", 55000, RegistryValueKind.DWord);
                             unKey.SetValue("NoModify", 1, RegistryValueKind.DWord);
                             unKey.SetValue("NoRepair", 1, RegistryValueKind.DWord);
                             unKey.SetValue("HelpLink", "https://github.com/Noventra-labs/Kestrel", RegistryValueKind.String);
                             unKey.SetValue("URLInfoAbout", "https://github.com/Noventra-labs/Kestrel", RegistryValueKind.String);
                             unKey.SetValue("URLUpdateInfo", "https://github.com/Noventra-labs/Kestrel/releases", RegistryValueKind.String);
+                            unKey.SetValue("Comments", "Fast, keyboard-first Raycast alternative for Windows 11", RegistryValueKind.String);
                         }
                     }
                     catch (Exception ex) { throw new IOException("Could not register Kestrel in Windows Installed Apps.", ex); }
