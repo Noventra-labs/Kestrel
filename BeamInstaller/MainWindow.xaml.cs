@@ -60,7 +60,11 @@ namespace BeamInstaller
             if (_isSilentMode)
             {
                 ShowStep(2);
-                await PerformInstallationAsync();
+                if (!await PerformInstallationAsync())
+                {
+                    System.Windows.Application.Current.Shutdown(1);
+                    return;
+                }
                 await LaunchInstalledKestrelAsync();
                 Close();
             }
@@ -83,6 +87,11 @@ namespace BeamInstaller
 
         private async void BtnPrimary_Click(object sender, MouseButtonEventArgs e)
         {
+            if (_currentStep == 4)
+            {
+                ShowStep(1);
+                return;
+            }
             if (_currentStep == 1)
             {
                 ShowStep(2);
@@ -113,7 +122,7 @@ namespace BeamInstaller
             _currentStep = step;
 
             PageSetup.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
-            PageInstalling.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
+            PageInstalling.Visibility = step is 2 or 4 ? Visibility.Visible : Visibility.Collapsed;
             PageComplete.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
 
             if (step == 1)
@@ -133,6 +142,12 @@ namespace BeamInstaller
                 BtnPrimary.Visibility = Visibility.Visible;
                 TxtPrimaryBtn.Text = "Launch & Finish";
             }
+            else if (step == 4)
+            {
+                BtnCancel.Visibility = Visibility.Visible;
+                BtnPrimary.Visibility = Visibility.Visible;
+                TxtPrimaryBtn.Text = "Back to Setup";
+            }
         }
 
         private void UpdateProgress(string stepLabel, int percentage)
@@ -147,7 +162,7 @@ namespace BeamInstaller
             });
         }
 
-        private async Task PerformInstallationAsync()
+        private async Task<bool> PerformInstallationAsync()
         {
             string installDir = TxtInstallDir.Text.Trim();
             if (string.IsNullOrWhiteSpace(installDir))
@@ -161,11 +176,14 @@ namespace BeamInstaller
             bool createShortcuts = OptCreateShortcuts.IsChecked == true;
             bool launchOnBoot = OptLaunchOnBoot.IsChecked == true;
             bool configureHook = OptConfigureWinHook.IsChecked == true;
+            Exception? failure = null;
+            InstallingHeaderTitle.Text = "Installing Kestrel...";
 
             await Task.Run(async () =>
             {
                 try
                 {
+                    installDir = InstallationFiles.ValidateDirectory(installDir);
                     UpdateProgress("Closing active instances...", 15);
                     foreach (var name in new[] { "Kestrel", "Beam" })
                     {
@@ -196,13 +214,10 @@ namespace BeamInstaller
                     var currentInstallerExe = Process.GetCurrentProcess().MainModule?.FileName;
                     if (!string.IsNullOrEmpty(currentInstallerExe) && File.Exists(currentInstallerExe))
                     {
-                        try
-                        {
-                            File.Copy(currentInstallerExe, uninstallerPath, true);
-                            DeleteFile(uninstallerPath + ":Zone.Identifier");
-                        }
-                        catch { }
+                        File.Copy(currentInstallerExe, uninstallerPath, true);
+                        DeleteFile(uninstallerPath + ":Zone.Identifier");
                     }
+                    else throw new IOException("Cannot locate the setup executable to install the uninstaller.");
 
                     if (configureHook)
                     {
@@ -240,8 +255,8 @@ namespace BeamInstaller
                             "Kestrel — Fast Command Bar for Windows",
                             targetIco);
 
-                        // Publisher subfolder shortcut (Appears under 'N' for Noventra Labs)
-                        string noventraFolder = Path.Combine(startPrograms, "Noventra Labs");
+                        // Publisher subfolder shortcut (Appears under 'N' for Noventra-Labs)
+                        string noventraFolder = Path.Combine(startPrograms, "Noventra-Labs");
                         ShortcutHelper.CreateShortcut(
                             Path.Combine(noventraFolder, "Kestrel.lnk"),
                             targetExe,
@@ -268,7 +283,7 @@ namespace BeamInstaller
                         if (unKey != null)
                         {
                             unKey.SetValue("DisplayName", "Kestrel", RegistryValueKind.String);
-                            unKey.SetValue("Publisher", "Noventra Labs", RegistryValueKind.String);
+                            unKey.SetValue("Publisher", "Noventra-Labs", RegistryValueKind.String);
                             unKey.SetValue("DisplayVersion", "2.3.1", RegistryValueKind.String);
                             unKey.SetValue("DisplayIcon", targetIco, RegistryValueKind.String);
                             unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
@@ -281,19 +296,29 @@ namespace BeamInstaller
                             unKey.SetValue("URLUpdateInfo", "https://github.com/Noventra-labs/Kestrel/releases", RegistryValueKind.String);
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { throw new IOException("Could not register Kestrel in Windows Installed Apps.", ex); }
 
                     UpdateProgress("Installation complete", 100);
                     await Task.Delay(320);
                 }
                 catch (Exception ex)
                 {
-                    UpdateProgress($"Notice: {ex.Message}", 100);
-                    await Task.Delay(600);
+                    failure = ex;
                 }
             });
 
+            if (failure != null)
+            {
+                _installedExePath = string.Empty;
+                Environment.ExitCode = 1;
+                ShowStep(4);
+                InstallingHeaderTitle.Text = "Installation failed";
+                UpdateProgress(failure.Message, 0);
+                return false;
+            }
+            Environment.ExitCode = 0;
             ShowStep(3);
+            return true;
         }
 
         private static void ExtractPayload(string targetExe, string targetIco)
@@ -308,16 +333,26 @@ namespace BeamInstaller
             string icoRes = Array.Find(names, n => n.EndsWith("Payload.beam.ico", StringComparison.OrdinalIgnoreCase))
                          ?? throw new InvalidOperationException("Embedded icon resource not found.");
 
-            using (var stream = asm.GetManifestResourceStream(exeRes)!)
-            using (var fs = new FileStream(targetExe, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                stream.CopyTo(fs);
-            }
+            ExtractAtomically(asm, exeRes, targetExe);
+            ExtractAtomically(asm, icoRes, targetIco);
+        }
 
-            using (var stream = asm.GetManifestResourceStream(icoRes)!)
-            using (var fs = new FileStream(targetIco, FileMode.Create, FileAccess.Write, FileShare.None))
+        private static void ExtractAtomically(Assembly assembly, string resource, string destination)
+        {
+            string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
             {
-                stream.CopyTo(fs);
+                using (var stream = assembly.GetManifestResourceStream(resource)!)
+                using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.CopyTo(file);
+                    file.Flush(true);
+                }
+                File.Move(temporary, destination, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporary)) File.Delete(temporary);
             }
         }
 
@@ -358,6 +393,24 @@ namespace BeamInstaller
                 }
             }
 
+            string installDir;
+            try
+            {
+                using var installed = Registry.CurrentUser.OpenSubKey(UninstallRegKey);
+                using var legacy = Registry.CurrentUser.OpenSubKey(LegacyUninstallRegKey);
+                string? registered = (installed?.GetValue("InstallLocation") ?? legacy?.GetValue("InstallLocation")) as string;
+                installDir = InstallationFiles.ResolveUninstallDirectory(Environment.ProcessPath, registered);
+                // Validate and schedule before removing registry metadata. Cleanup waits for this process.
+                InstallationFiles.ScheduleCleanup(installDir);
+            }
+            catch (Exception ex)
+            {
+                if (!_isSilentMode)
+                    System.Windows.MessageBox.Show(ex.Message, "Uninstall failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.Application.Current.Shutdown(1);
+                return;
+            }
+
             ShowStep(2);
             InstallingHeaderTitle.Text = "Uninstalling Kestrel...";
 
@@ -394,15 +447,22 @@ namespace BeamInstaller
                     foreach (var fn in new[] { "Kestrel.lnk", "Beam.lnk" })
                     {
                         string p1 = Path.Combine(startPrograms, fn);
-                        string p2 = Path.Combine(startPrograms, "Noventra Labs", fn);
                         if (File.Exists(p1)) File.Delete(p1);
-                        if (File.Exists(p2)) File.Delete(p2);
+                        // Also remove shortcuts created under the former publisher spelling.
+                        foreach (var publisherFolder in new[] { "Noventra-Labs", "Noventra Labs" })
+                        {
+                            string p2 = Path.Combine(startPrograms, publisherFolder, fn);
+                            if (File.Exists(p2)) File.Delete(p2);
+                        }
                     }
 
-                    string noventraFolder = Path.Combine(startPrograms, "Noventra Labs");
-                    if (Directory.Exists(noventraFolder) && Directory.GetFiles(noventraFolder).Length == 0)
+                    foreach (var publisherFolder in new[] { "Noventra-Labs", "Noventra Labs" })
                     {
-                        try { Directory.Delete(noventraFolder); } catch { }
+                        string noventraFolder = Path.Combine(startPrograms, publisherFolder);
+                        if (Directory.Exists(noventraFolder) && Directory.GetFileSystemEntries(noventraFolder).Length == 0)
+                        {
+                            try { Directory.Delete(noventraFolder); } catch { }
+                        }
                     }
 
                     ShortcutHelper.NotifyShell();
@@ -417,32 +477,6 @@ namespace BeamInstaller
                     runKey?.DeleteValue("BeamLauncher", false);
                     Registry.CurrentUser.DeleteSubKeyTree(UninstallRegKey, false);
                     Registry.CurrentUser.DeleteSubKeyTree(LegacyUninstallRegKey, false);
-                }
-                catch { }
-
-                // Schedule deletion of installation folder after process exit
-                try
-                {
-                    string installDir = TxtInstallDir.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(installDir))
-                    {
-                        installDir = Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                            "Programs",
-                            "Kestrel");
-                    }
-
-                    if (Directory.Exists(installDir))
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "cmd.exe",
-                            Arguments = $"/c timeout /t 1 /nobreak >nul & rmdir /s /q \"{installDir}\"",
-                            CreateNoWindow = true,
-                            WindowStyle = ProcessWindowStyle.Hidden,
-                            UseShellExecute = true
-                        });
-                    }
                 }
                 catch { }
 

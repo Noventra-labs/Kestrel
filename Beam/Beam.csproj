@@ -13,12 +13,12 @@
     <Version>2.3.1</Version>
     <FileVersion>2.3.1.0</FileVersion>
     <AssemblyVersion>2.3.1.0</AssemblyVersion>
-    <Company>Noventra Labs</Company>
-    <Authors>Noventra Labs</Authors>
+    <Company>Noventra-Labs</Company>
+    <Authors>Noventra-Labs</Authors>
     <Product>Kestrel</Product>
-    <AssemblyTitle>Kestrel Launcher by Noventra Labs</AssemblyTitle>
-    <Copyright>Copyright © 2026 Noventra Labs. All rights reserved.</Copyright>
-    <Description>High-Definition Raycast for Windows Clone by Noventra Labs</Description>
+    <AssemblyTitle>Kestrel Launcher by Noventra-Labs</AssemblyTitle>
+    <Copyright>Copyright © 2026 Noventra-Labs. All rights reserved.</Copyright>
+    <Description>High-Definition Raycast for Windows Clone by Noventra-Labs</Description>
     <RepositoryUrl>https://github.com/Noventra-labs/Kestrel</RepositoryUrl>
     <PackageProjectUrl>https://github.com/Noventra-labs/Kestrel</PackageProjectUrl>
     <TieredCompilation>true</TieredCompilation>

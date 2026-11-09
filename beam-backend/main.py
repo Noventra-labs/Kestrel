@@ -2,13 +2,14 @@ import os
 import json
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from dotenv import load_dotenv
 
 from services.llm_router import LLMRouter
+from services.client_auth import AUTH_SCHEME, authenticated_client
 
 load_dotenv()
 
@@ -25,7 +26,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Beam AI Cloud Service — Noventra Labs",
+    title="Beam AI Cloud Service — Noventra-Labs",
     description="High-performance streaming AI backend with Supabase Encrypted Key Vault, deployable to GCP Cloud Run.",
     version="2.3.0",
     lifespan=lifespan,
@@ -46,17 +47,17 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     messages: List[ChatMessage]
     model: Optional[str] = "gemini-2.0-flash"
     api_key_override: Optional[str] = None
-    client_id: Optional[str] = "default"
     stream: Optional[bool] = True
 
 
 class SaveKeyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     provider: str  # "gemini" | "openai" | "anthropic" | "groq"
     api_key: str
-    client_id: Optional[str] = "default"
 
 
 @app.get("/health")
@@ -64,9 +65,10 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "beam-backend",
-        "publisher": "Noventra Labs",
+        "publisher": "Noventra-Labs",
         "environment": os.getenv("ENVIRONMENT", "production"),
         "version": "2.3.0",
+        "auth_scheme": AUTH_SCHEME,
         "supabase_vault_configured": router.vault.is_configured,
         "cache": router.get_cache_stats(),
     }
@@ -80,7 +82,7 @@ async def get_models():
 
 
 @app.post("/v1/keys")
-async def store_api_key_in_supabase(req: SaveKeyRequest):
+async def store_api_key_in_supabase(req: SaveKeyRequest, client_id: str = Depends(authenticated_client)):
     """Encrypts and stores a provider API key in Supabase (`public.beam_api_keys`)."""
     provider = req.provider.lower().strip()
     if provider not in ("gemini", "openai", "anthropic", "groq"):
@@ -92,31 +94,36 @@ async def store_api_key_in_supabase(req: SaveKeyRequest):
         client=router.get_client(),
         provider=provider,
         api_key=req.api_key.strip(),
-        client_id=req.client_id or "default",
+        client_id=client_id,
     )
+    if not result.get("supabase_synced"):
+        raise HTTPException(503, "Cloud storage unavailable; the key was not saved to the vault")
     return result
 
 
 @app.get("/v1/keys")
-async def list_stored_keys(client_id: str = "default"):
+async def list_stored_keys(client_id: str = Depends(authenticated_client)):
     """Lists masked metadata of API keys stored in Supabase without exposing plaintext keys."""
     return await router.vault.list_stored_keys(router.get_client(), client_id)
 
 
 @app.delete("/v1/keys/{provider}")
-async def delete_stored_key(provider: str, client_id: str = "default"):
+async def delete_stored_key(provider: str, client_id: str = Depends(authenticated_client)):
     """Deletes a provider API key from Supabase and in-memory cache."""
+    if provider not in ("gemini", "openai", "anthropic", "groq"):
+        raise HTTPException(400, "Unknown provider")
+    router.clear_cache(client_id)
     return await router.vault.delete_api_key(router.get_client(), provider, client_id)
 
 
 @app.post("/v1/cache/clear")
-async def clear_cache():
-    cleared = router.clear_cache()
+async def clear_cache(client_id: str = Depends(authenticated_client)):
+    cleared = router.clear_cache(client_id)
     return {"status": "cleared", "entries_removed": cleared}
 
 
 @app.post("/v1/chat")
-async def chat_completion(req: ChatRequest):
+async def chat_completion(req: ChatRequest, client_id: str = Depends(authenticated_client)):
     if not req.messages:
         raise HTTPException(status_code=400, detail="Messages array cannot be empty")
 
@@ -128,7 +135,7 @@ async def chat_completion(req: ChatRequest):
                 messages=msg_dicts,
                 model=req.model or "gemini-2.0-flash",
                 api_key_override=req.api_key_override,
-                client_id=req.client_id or "default",
+                client_id=client_id,
             ),
             media_type="text/event-stream",
             headers={
@@ -143,7 +150,7 @@ async def chat_completion(req: ChatRequest):
             messages=msg_dicts,
             model=req.model or "gemini-2.0-flash",
             api_key_override=req.api_key_override,
-            client_id=req.client_id or "default",
+            client_id=client_id,
         ):
             if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
                 try:

@@ -1,5 +1,5 @@
 # Kestrel for Windows (v2.3.1)
-**Published by Noventra Labs** • [GitHub Repository](https://github.com/Noventra-labs/Kestrel)
+**Published by Noventra-Labs** • [GitHub Repository](https://github.com/Noventra-labs/Kestrel)
 
 Kestrel is a native Windows 11 command bar, launcher, window manager, clipboard vault, local file indexer, Mem Reduct system RAM cleaner, Microsoft PowerToys suite, and embedded Google Gemini AI suite engineered with .NET 10 WPF, Win32 DWM Acrylic/Mica, and a cloud-ready FastAPI + Supabase backend.
 
@@ -9,7 +9,7 @@ Kestrel is a native Windows 11 command bar, launcher, window manager, clipboard 
 
 ```text
 Raycast/
-├── Kestrel-Setup.exe       # Standalone Windows Setup Wizard & Uninstaller (Noventra Labs)
+├── Kestrel-Setup.exe       # Standalone Windows Setup Wizard & Uninstaller (Noventra-Labs)
 ├── Kestrel.exe             # Portable Single-File Executable
 ├── Beam/                   # Native .NET 10 WPF Desktop Client Source Code
 ├── BeamInstaller/          # Standalone Windows GUI Installer Source Code
@@ -29,11 +29,11 @@ Raycast/
 
 ## 🚀 Installing Kestrel on Windows
 
-Run **[`Kestrel-Setup.exe`](./Kestrel-Setup.exe)** to launch the **Noventra Labs Setup Wizard**:
+Run **[`Kestrel-Setup.exe`](./Kestrel-Setup.exe)** to launch the **Noventra-Labs Setup Wizard**:
 1. Installs `Kestrel.exe` and `Uninstall-Kestrel.exe` to `%LOCALAPPDATA%\Programs\Kestrel`.
-2. Creates **Start Menu** (`Programs\Noventra Labs\Kestrel.lnk`) and **Desktop** shortcuts.
+2. Creates **Start Menu** (`Programs\Noventra-Labs\Kestrel.lnk`) and **Desktop** shortcuts.
 3. Configures **Launch at Windows Login** (`HKCU\...\Run`).
-4. Registers **Kestrel** (Publisher: **Noventra Labs**) in **Windows Settings → Apps → Installed Apps**.
+4. Registers **Kestrel** (Publisher: **Noventra-Labs**) in **Windows Settings → Apps → Installed Apps**.
 
 ---
 

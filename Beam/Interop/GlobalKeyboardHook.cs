@@ -16,9 +16,10 @@ namespace Beam.Interop
         private const ushort VK_LWIN = 0x5B;
         private const ushort VK_RWIN = 0x5C;
         private const int VK_MENU = 0x12; // Alt key
-        private const ushort VK_MASK_E8 = 0xE8; // Unassigned virtual key used to cancel Windows Start Menu chord
+        private const ushort VK_LCONTROL = 0xA2; // Left Control used to cancel Windows Start Menu chord
 
         private const uint INPUT_KEYBOARD = 1;
+        private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
         private const uint KEYEVENTF_KEYUP = 0x0002;
         public static readonly IntPtr EXTRA_INFO_SIGNATURE = new(unchecked((int)0xBEAA0001));
 
@@ -124,12 +125,15 @@ namespace Beam.Interop
                     _hookId = IntPtr.Zero;
                 }
 
-                using var curProcess = Process.GetCurrentProcess();
-                using var curModule = curProcess.MainModule;
-                IntPtr modHandle = curModule != null ? GetModuleHandle(curModule.ModuleName) : IntPtr.Zero;
+                IntPtr modHandle = GetModuleHandle(null);
                 _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, modHandle, 0);
+                int err = Marshal.GetLastWin32Error();
+                App.Log($"GlobalKeyboardHook: SetWindowsHookEx returned {_hookId}, modHandle={modHandle}, win32Error={err}");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                App.Log($"GlobalKeyboardHook: InstallHook exception: {ex}");
+            }
         }
 
         public void EnsureHookAlive()
@@ -159,6 +163,12 @@ namespace Beam.Interop
 
         private static INPUT CreateKeyInput(ushort vk, bool keyUp, IntPtr extraInfo)
         {
+            uint flags = keyUp ? KEYEVENTF_KEYUP : 0u;
+            if (vk == VK_LWIN || vk == VK_RWIN)
+            {
+                flags |= KEYEVENTF_EXTENDEDKEY;
+            }
+
             return new INPUT
             {
                 type = INPUT_KEYBOARD,
@@ -168,7 +178,7 @@ namespace Beam.Interop
                     {
                         wVk = vk,
                         wScan = (ushort)MapVirtualKey(vk, 0),
-                        dwFlags = keyUp ? KEYEVENTF_KEYUP : 0u,
+                        dwFlags = flags,
                         time = 0,
                         dwExtraInfo = extraInfo
                     }
@@ -209,6 +219,7 @@ namespace Beam.Interop
                 {
                     if (kbd.vkCode == VK_LWIN || kbd.vkCode == VK_RWIN)
                     {
+                        App.Log($"GlobalKeyboardHook: WinKey event: isKeyDown={isKeyDown}, isKeyUp={isKeyUp}, dwExtraInfo=0x{kbd.dwExtraInfo:X}");
                         if (isKeyDown)
                         {
                             if (!_winKeyDown)
@@ -217,16 +228,6 @@ namespace Beam.Interop
                                 _winKeyDownAlone = true;
                                 // Capture active app window BEFORE Windows Shell reacts
                                 CaptureActiveWindow();
-
-                                // Mask Start Menu immediately on KeyDown!
-                                // By injecting an unassigned virtual key (0xE8) while the Windows key is down,
-                                // Windows Shell registers that a companion key was pressed and clears its internal
-                                // standalone Start Menu flag (fWinKey = false). When the Windows key is subsequently released,
-                                // Windows Shell will NOT open the Start Menu.
-                                var mask = new INPUT[2];
-                                mask[0] = CreateKeyInput(VK_MASK_E8, false, EXTRA_INFO_SIGNATURE);
-                                mask[1] = CreateKeyInput(VK_MASK_E8, true, EXTRA_INFO_SIGNATURE);
-                                SendInput((uint)mask.Length, mask, Marshal.SizeOf<INPUT>());
                             }
                         }
                         else if (isKeyUp)
@@ -237,10 +238,25 @@ namespace Beam.Interop
 
                             if (wasAlone)
                             {
-                                // Trigger Kestrel launcher. Because Windows Shell already registered the 0xE8 chord
-                                // during KeyDown, letting the physical Win Up event pass through cleanly updates the
-                                // OS modifier table without ever popping up the Start Menu.
+                                // 1. Synthesize neutral Left Control (0xA2, scan code 0x1D) Down + Up
+                                //    BEFORE releasing Win key so Windows Shell registers a companion keypress
+                                //    and clears its internal standalone Start Menu flag (fWinKey).
+                                // 2. Follow with synthetic Win Up stamped with EXTRA_INFO_SIGNATURE
+                                //    so the OS modifier table cleanly releases the Win key state.
+                                var inputs = new INPUT[3];
+                                inputs[0] = CreateKeyInput(VK_LCONTROL, false, EXTRA_INFO_SIGNATURE);
+                                inputs[1] = CreateKeyInput(VK_LCONTROL, true, EXTRA_INFO_SIGNATURE);
+                                inputs[2] = CreateKeyInput((ushort)kbd.vkCode, true, EXTRA_INFO_SIGNATURE);
+                                uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+                                int err = Marshal.GetLastWin32Error();
+
+                                App.Log($"GlobalKeyboardHook: Win solo tap masked with Left Ctrl (SendInput sent={sent}/3, err={err}), triggering launcher");
+
+                                // 3. Trigger Kestrel launcher
                                 _onTrigger?.Invoke();
+
+                                // 4. Swallow raw physical Win Up so Explorer never receives solo Win tap
+                                return (IntPtr)1;
                             }
                         }
                     }

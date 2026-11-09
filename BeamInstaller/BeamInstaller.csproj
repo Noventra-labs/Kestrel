@@ -13,12 +13,12 @@
     <Version>2.3.1</Version>
     <FileVersion>2.3.1.0</FileVersion>
     <AssemblyVersion>2.3.1.0</AssemblyVersion>
-    <Company>Noventra Labs</Company>
-    <Authors>Noventra Labs</Authors>
+    <Company>Noventra-Labs</Company>
+    <Authors>Noventra-Labs</Authors>
     <Product>Kestrel Setup Wizard</Product>
-    <AssemblyTitle>Kestrel Setup — Noventra Labs</AssemblyTitle>
-    <Copyright>Copyright © 2026 Noventra Labs. All rights reserved.</Copyright>
-    <Description>Official Standalone Windows Installer for Kestrel by Noventra Labs</Description>
+    <AssemblyTitle>Kestrel Setup — Noventra-Labs</AssemblyTitle>
+    <Copyright>Copyright © 2026 Noventra-Labs. All rights reserved.</Copyright>
+    <Description>Official Standalone Windows Installer for Kestrel by Noventra-Labs</Description>
     <RepositoryUrl>https://github.com/Noventra-labs/Kestrel</RepositoryUrl>
     <PackageProjectUrl>https://github.com/Noventra-labs/Kestrel</PackageProjectUrl>
   </PropertyGroup>

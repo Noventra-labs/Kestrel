@@ -49,6 +49,8 @@ namespace Beam
         private bool _isGeminiWebModeActive = true;
         private DateTime _ignoreDeactivateUntil = DateTime.MinValue;
         private CancellationTokenSource? _aiCts;
+        private readonly List<ChatMessage> _apiConversation = new();
+        private string _apiConversationModel = "";
         private CancellationTokenSource? _searchCts;
         private Forms.NotifyIcon? _notifyIcon;
         private GlobalKeyboardHook? _keyboardHook;
@@ -443,6 +445,7 @@ namespace Beam
         {
             var helper = new WindowInteropHelper(this);
             bool hasFocus = IsActive || DwmApi.IsForegroundOwnedByBeamOrChild(helper.Handle);
+            App.Log($"SummonOrToggle: IsVisible={IsVisible}, WindowState={WindowState}, hasFocus={hasFocus}");
             if (IsVisible && WindowState != WindowState.Minimized && hasFocus)
             {
                 HideAndTrim();
@@ -1205,7 +1208,7 @@ namespace Beam
             RefreshIndexTelemetryText();
 
             _isLoadingSettingsUi = false;
-            SettingsSavedNotice.Text = "Kestrel v2.3.1 • Noventra Labs";
+            SettingsSavedNotice.Text = "Kestrel v2.3.1 • Noventra-Labs";
             SettingsOverlay.Visibility = Visibility.Visible;
         }
 
@@ -1573,6 +1576,9 @@ namespace Beam
             }
             else
             {
+                _aiCts?.Cancel();
+                _aiCts = null;
+                _apiConversation.Clear();
                 ApiChatHistoryPanel.Children.Clear();
                 AiUserPromptText.Text = "Ask anything...";
                 AiResponseText.Text = "";
@@ -1790,6 +1796,18 @@ namespace Beam
 
         private async Task StreamApiMessageAsync(string prompt)
         {
+            _aiCts?.Cancel();
+            var requestCts = new CancellationTokenSource();
+            _aiCts = requestCts;
+            if (_apiConversationModel != _settings.DefaultAiModel)
+            {
+                _apiConversation.Clear();
+                ApiChatHistoryPanel.Children.Clear();
+                AiResponseText.Text = "";
+                _apiConversationModel = _settings.DefaultAiModel;
+            }
+            var messages = _apiConversation.Append(new ChatMessage("user", prompt)).ToArray();
+            var responseText = new System.Text.StringBuilder();
             // Archive previous exchange into history panel if it had content
             if (AiUserPromptText.Text != "Ask Gemini anything below..." &&
                 AiUserPromptText.Text != "New Conversation Started" &&
@@ -1839,21 +1857,20 @@ namespace Beam
             AiStatusText.Text = "Streaming response...";
             ApiChatScrollViewer.ScrollToBottom();
 
-            _aiCts?.Cancel();
-            _aiCts = new CancellationTokenSource();
-
             try
             {
                 bool firstChunk = true;
                 await AiClient.StreamChatAsync(
                     _settings.CloudBackendUrl,
-                    prompt,
+                    messages,
                     _settings.DefaultAiModel,
                     _settings.GetApiKeyForModel(_settings.DefaultAiModel),
                     delta =>
                     {
                         Dispatcher.Invoke(() =>
                         {
+                            if (_aiCts != requestCts || requestCts.IsCancellationRequested) return;
+                            responseText.Append(delta);
                             if (firstChunk)
                             {
                                 AiResponseText.Text = "";
@@ -1863,19 +1880,35 @@ namespace Beam
                             ApiChatScrollViewer.ScrollToBottom();
                         });
                     },
-                    _aiCts.Token);
+                    requestCts.Token);
 
+                if (_aiCts != requestCts || requestCts.IsCancellationRequested) return;
+                string answer = responseText.ToString();
+                if (!string.IsNullOrWhiteSpace(answer) &&
+                    !answer.StartsWith("Error:") && !answer.StartsWith("Gemini Error") &&
+                    !answer.StartsWith("API Error") && !answer.StartsWith("Anthropic Error"))
+                {
+                    _apiConversation.Add(new ChatMessage("user", prompt));
+                    _apiConversation.Add(new ChatMessage("assistant", answer));
+                }
                 AiStatusText.Text = "✓ Completed • Type below to continue chatting";
             }
             catch (OperationCanceledException)
             {
+                if (_aiCts != requestCts) return;
                 AiStatusText.Text = "Cancelled";
             }
             catch (Exception ex)
             {
+                if (_aiCts != requestCts) return;
                 AiResponseText.Text = $"⚠️ Fast API Connection Notice:\n{ex.Message}\n\n" +
                     "Tip: Click '✦ Gemini Web (gemini.google.com)' in the top bar above to chat with Google Gemini directly without needing a backend or API key, or add your Gemini API Key in Settings (Ctrl+,)!";
                 AiStatusText.Text = "Click '✦ Gemini Web' above or configure API Key in Settings";
+            }
+            finally
+            {
+                if (_aiCts == requestCts) _aiCts = null;
+                requestCts.Dispose();
             }
         }
 

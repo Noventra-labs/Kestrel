@@ -10,7 +10,7 @@ from services.supabase_vault import SupabaseKeyVault
 
 class LLMRouter:
     """
-    High-performance multi-model LLM router (Noventra Labs) with:
+    High-performance multi-model LLM router (Noventra-Labs) with:
     1. Persistent shared HTTP connection pooling.
     2. Secure Supabase API Key Vault integration (encrypted at rest + TTL memory cache).
     3. In-memory LRU + TTL response cache for instant (<2ms) replay on repeated queries.
@@ -18,25 +18,11 @@ class LLMRouter:
     """
 
     def __init__(self, cache_size: int = 128, cache_ttl_seconds: int = 3600):
-        self.gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-        self.openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-        self.anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-        self.groq_key = os.getenv("GROQ_API_KEY", "").strip()
-
-        if self.gemini_key == "your_gemini_api_key_here":
-            self.gemini_key = ""
-        if self.openai_key == "your_openai_api_key_here":
-            self.openai_key = ""
-        if self.anthropic_key == "your_anthropic_api_key_here":
-            self.anthropic_key = ""
-        if self.groq_key == "your_groq_api_key_here":
-            self.groq_key = ""
-
         self.vault = SupabaseKeyVault()
 
         self.cache_size = cache_size
         self.cache_ttl = cache_ttl_seconds
-        self._cache: OrderedDict[str, Tuple[float, str]] = OrderedDict()
+        self._cache: OrderedDict[Tuple[str, str], Tuple[float, str]] = OrderedDict()
         self.cache_hits = 0
         self.cache_misses = 0
 
@@ -64,7 +50,7 @@ class LLMRouter:
         Resolves an API key in priority order:
         1. Explicit `api_key_override` in request (also syncs to Supabase Vault automatically).
         2. Encrypted key stored in Supabase (`public.beam_api_keys`) via `SupabaseKeyVault`.
-        3. Environment variable fallback (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.).
+        Server environment keys are deliberately never used for client requests.
         """
         client = self.get_client()
         if api_key_override and api_key_override.strip():
@@ -80,19 +66,17 @@ class LLMRouter:
         if vault_key:
             return vault_key
 
-        env_map = {
-            "gemini": self.gemini_key,
-            "openai": self.openai_key,
-            "anthropic": self.anthropic_key,
-            "groq": self.groq_key,
-        }
-        return env_map.get(provider, "")
+        # Never let a self-provisioned installation spend a shared server key.
+        return ""
 
-    def _make_cache_key(self, model: str, messages: List[Dict[str, str]]) -> str:
-        raw = json.dumps({"model": model, "messages": messages}, sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    def _make_cache_key(self, model: str, messages: List[Dict[str, str]],
+                        client_id: str, api_key: str) -> Tuple[str, str]:
+        raw = json.dumps({"model": model, "messages": messages,
+                          "credential": hashlib.sha256(api_key.encode()).hexdigest()},
+                         sort_keys=True, ensure_ascii=False)
+        return client_id, hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def _get_cached(self, key: str) -> Optional[str]:
+    def _get_cached(self, key: Tuple[str, str]) -> Optional[str]:
         if key not in self._cache:
             return None
         ts, value = self._cache[key]
@@ -102,7 +86,7 @@ class LLMRouter:
         self._cache.move_to_end(key)
         return value
 
-    def _set_cached(self, key: str, value: str):
+    def _set_cached(self, key: Tuple[str, str], value: str):
         if not value or value.startswith("Error:") or value.startswith("Gemini Error") or value.startswith("API Error"):
             return
         self._cache[key] = (time.time(), value)
@@ -110,10 +94,11 @@ class LLMRouter:
         while len(self._cache) > self.cache_size:
             self._cache.popitem(last=False)
 
-    def clear_cache(self) -> int:
-        count = len(self._cache)
-        self._cache.clear()
-        return count
+    def clear_cache(self, client_id: str) -> int:
+        keys = [key for key in self._cache if key[0] == client_id]
+        for key in keys:
+            del self._cache[key]
+        return len(keys)
 
     def get_cache_stats(self) -> Dict[str, Any]:
         return {
@@ -146,7 +131,27 @@ class LLMRouter:
         client_id: str = "default",
     ) -> AsyncGenerator[str, None]:
         """Streams LLM tokens using standardized Server-Sent Events (SSE)."""
-        cache_key = self._make_cache_key(model, messages)
+        if "gemini" in model:
+            provider = "gemini"
+        elif model.startswith("gpt-"):
+            provider = "openai"
+        elif "llama" in model or "mixtral" in model:
+            provider = "groq"
+        elif "claude" in model:
+            provider = "anthropic"
+        else:
+            yield self._sse_delta(f"Error: Unsupported model '{model}'.")
+            yield "data: [DONE]\n\n"
+            return
+
+        # Resolve/persist overrides even on cache hits. Credential rotation also
+        # invalidates old responses, without placing plaintext keys in cache IDs.
+        key = await self.resolve_api_key(provider, api_key_override, client_id)
+        if not key:
+            yield self._sse_delta(f"Error: Configure your {provider} API key in Settings.")
+            yield "data: [DONE]\n\n"
+            return
+        cache_key = self._make_cache_key(model, messages, client_id, key)
         cached = self._get_cached(cache_key)
         if cached is not None:
             self.cache_hits += 1
@@ -160,7 +165,6 @@ class LLMRouter:
 
         # 1. Google Gemini
         if "gemini" in model:
-            key = await self.resolve_api_key("gemini", api_key_override, client_id)
             if not key:
                 yield self._sse_delta("Error: Gemini API key is not configured in Supabase Vault or backend .env.")
                 yield "data: [DONE]\n\n"
@@ -194,7 +198,6 @@ class LLMRouter:
         elif model.startswith("gpt-") or "llama" in model or "mixtral" in model:
             is_groq = "llama" in model or "mixtral" in model
             provider = "groq" if is_groq else "openai"
-            key = await self.resolve_api_key(provider, api_key_override, client_id)
             endpoint = (
                 "https://api.groq.com/openai/v1/chat/completions"
                 if is_groq
@@ -237,7 +240,6 @@ class LLMRouter:
 
         # 3. Anthropic Claude
         elif "claude" in model:
-            key = await self.resolve_api_key("anthropic", api_key_override, client_id)
             if not key:
                 yield self._sse_delta("Error: Anthropic API key is not configured in Supabase Vault or .env.")
                 yield "data: [DONE]\n\n"

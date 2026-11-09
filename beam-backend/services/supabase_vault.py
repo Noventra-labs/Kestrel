@@ -23,7 +23,12 @@ class SupabaseKeyVault:
             os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
             or os.getenv("SUPABASE_KEY", "").strip()
         )
-        secret_seed = os.getenv("VAULT_ENCRYPTION_SECRET", "noventra-labs-beam-default-vault-secret-2026")
+        secret_seed = os.getenv("VAULT_ENCRYPTION_SECRET", "").strip()
+        if (len(secret_seed) < 32 or secret_seed in {
+            "noventra-labs-beam-default-vault-secret-2026",
+            "change-this-to-a-strong-32-char-secret-key",
+        }):
+            raise RuntimeError("VAULT_ENCRYPTION_SECRET must be a private secret of at least 32 characters")
         self._master_key = hashlib.sha256(secret_seed.encode("utf-8")).digest()
 
         self.cache_ttl = cache_ttl_seconds

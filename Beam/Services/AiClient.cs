@@ -1,4 +1,7 @@
 using System;
+using Beam.Models;
+using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -11,8 +14,9 @@ namespace Beam.Services
 {
     public class AiClient
     {
-        private static readonly HttpClient Client = new(new SocketsHttpHandler
+        internal static HttpClient Client { get; set; } = new(new SocketsHttpHandler
         {
+            AllowAutoRedirect = false,
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
             MaxConnectionsPerServer = 20,
@@ -22,19 +26,37 @@ namespace Beam.Services
             Timeout = TimeSpan.FromSeconds(60)
         };
 
+        private static async Task<Uri> VerifyBackendAsync(string backendUrl, CancellationToken token)
+        {
+            var backend = CloudIdentity.ValidateBackend(backendUrl);
+            using var response = await Client.GetAsync(new Uri(backend, "health"), token);
+            response.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+            if (!doc.RootElement.TryGetProperty("auth_scheme", out var scheme) ||
+                scheme.GetString() != "installation-bearer-v1")
+                throw new HttpRequestException("The cloud backend needs the security update. No credentials were sent.");
+            return backend;
+        }
+
         public static async Task<bool> CheckBackendHealthAsync(string backendUrl)
         {
             try
             {
-                var healthUrl = backendUrl.TrimEnd('/') + "/health";
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                using var res = await Client.GetAsync(healthUrl, cts.Token);
-                return res.IsSuccessStatusCode;
+                await VerifyBackendAsync(backendUrl, cts.Token);
+                return true;
             }
-            catch
-            {
-                return false;
-            }
+            catch { return false; }
+        }
+
+        private static async Task<HttpRequestMessage> CloudRequestAsync(
+            string backendUrl, string endpoint, object payload, CancellationToken token)
+        {
+            var backend = await VerifyBackendAsync(backendUrl, token);
+            var request = new HttpRequestMessage(HttpMethod.Post, new Uri(backend, endpoint));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CloudIdentity.GetCredential(backend));
+            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            return request;
         }
 
         public static async Task<(bool Ok, string Message)> SaveKeyToSupabaseVaultAsync(
@@ -54,26 +76,25 @@ namespace Beam.Services
 
             try
             {
-                var url = backendUrl.TrimEnd('/') + "/v1/keys";
-                var payload = new
-                {
-                    provider,
-                    api_key = apiKey.Trim(),
-                    key_label = "Saved from Beam Desktop"
-                };
-                var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                var payload = new { provider, api_key = apiKey.Trim() };
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
-                using var res = await Client.PostAsync(url, jsonContent, cts.Token);
+                using var request = await CloudRequestAsync(backendUrl, "v1/keys", payload, cts.Token);
+                using var res = await Client.SendAsync(request, cts.Token);
                 if (res.IsSuccessStatusCode)
                 {
-                    return (true, $"Encrypted & stored '{provider}' key in Supabase Vault");
+                    using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(cts.Token));
+                    bool persisted = doc.RootElement.TryGetProperty("supabase_synced", out var synced) &&
+                        synced.ValueKind == JsonValueKind.True;
+                    return persisted
+                        ? (true, $"Encrypted & stored '{provider}' key in Supabase Vault")
+                        : (false, "Cloud storage did not confirm saving the key. Your local key is unchanged.");
                 }
                 var err = await res.Content.ReadAsStringAsync(cts.Token);
                 return (false, $"Vault error ({(int)res.StatusCode}): {err}");
             }
             catch
             {
-                return (false, $"Saved '{provider}' API key locally (Cloud Backend offline)");
+                return (false, "Cloud save failed. Your local key is unchanged; check the backend connection and configuration.");
             }
         }
 
@@ -98,7 +119,7 @@ namespace Beam.Services
 
         public static async Task StreamChatAsync(
             string backendUrl,
-            string prompt,
+            IReadOnlyList<ChatMessage> messages,
             string model,
             string? apiKeyOverride,
             Action<string> onDelta,
@@ -107,21 +128,22 @@ namespace Beam.Services
             var effectiveModel = string.IsNullOrWhiteSpace(model) ? "gemini-2.0-flash" : model.Trim();
             var provider = BeamSettings.InferProviderFromModel(effectiveModel);
             var effectiveKey = ResolveLocalApiKey(effectiveModel, apiKeyOverride);
+            bool receivedDelta = false;
+            var originalOnDelta = onDelta;
+            onDelta = delta => { receivedDelta = true; originalOnDelta(delta); };
 
             try
             {
-                var chatUrl = backendUrl.TrimEnd('/') + "/v1/chat";
 
                 var payload = new
                 {
-                    messages = new[] { new { role = "user", content = prompt } },
+                    messages,
                     model = effectiveModel,
                     api_key_override = string.IsNullOrWhiteSpace(effectiveKey) ? null : effectiveKey,
                     stream = true
                 };
 
-                var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-                using var request = new HttpRequestMessage(HttpMethod.Post, chatUrl) { Content = jsonContent };
+                using var request = await CloudRequestAsync(backendUrl, "v1/chat", payload, cancellationToken);
 
                 using var response = await Client.SendAsync(
                     request,
@@ -131,7 +153,7 @@ namespace Beam.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     var err = await response.Content.ReadAsStringAsync(cancellationToken);
-                    throw new Exception($"Cloud AI Service Error ({response.StatusCode}): {err}");
+                    throw new HttpRequestException($"Cloud AI Service Error ({response.StatusCode}): {err}");
                 }
 
                 using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -170,7 +192,7 @@ namespace Beam.Services
                     }
                 }
             }
-            catch (HttpRequestException) when (!string.IsNullOrWhiteSpace(effectiveKey))
+            catch (HttpRequestException) when (!receivedDelta && !string.IsNullOrWhiteSpace(effectiveKey))
             {
                 // 100% Local Direct Provider Fallback when Cloud Backend is not running
                 switch (provider)
@@ -178,7 +200,7 @@ namespace Beam.Services
                     case "openai":
                         await StreamDirectOpenAiCompatibleAsync(
                             "https://api.openai.com/v1/chat/completions",
-                            prompt,
+                            messages,
                             effectiveModel,
                             effectiveKey,
                             onDelta,
@@ -187,7 +209,7 @@ namespace Beam.Services
                     case "groq":
                         await StreamDirectOpenAiCompatibleAsync(
                             "https://api.groq.com/openai/v1/chat/completions",
-                            prompt,
+                            messages,
                             effectiveModel,
                             effectiveKey,
                             onDelta,
@@ -195,7 +217,7 @@ namespace Beam.Services
                         break;
                     case "anthropic":
                         await StreamDirectAnthropicAsync(
-                            prompt,
+                            messages,
                             effectiveModel,
                             effectiveKey,
                             onDelta,
@@ -203,7 +225,7 @@ namespace Beam.Services
                         break;
                     default:
                         await StreamDirectGeminiAsync(
-                            prompt,
+                            messages,
                             effectiveModel,
                             effectiveKey,
                             onDelta,
@@ -214,7 +236,7 @@ namespace Beam.Services
         }
 
         private static async Task StreamDirectGeminiAsync(
-            string prompt,
+            IReadOnlyList<ChatMessage> messages,
             string model,
             string apiKey,
             Action<string> onDelta,
@@ -223,14 +245,11 @@ namespace Beam.Services
             var endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={apiKey}";
             var payload = new
             {
-                contents = new[]
+                contents = messages.Select(m => new
                 {
-                    new
-                    {
-                        role = "user",
-                        parts = new[] { new { text = prompt } }
-                    }
-                }
+                    role = m.Role == "assistant" ? "model" : "user",
+                    parts = new[] { new { text = m.Content } }
+                }).ToArray()
             };
 
             var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -274,7 +293,7 @@ namespace Beam.Services
 
         private static async Task StreamDirectOpenAiCompatibleAsync(
             string endpoint,
-            string prompt,
+            IReadOnlyList<ChatMessage> messages,
             string model,
             string apiKey,
             Action<string> onDelta,
@@ -283,7 +302,7 @@ namespace Beam.Services
             var payload = new
             {
                 model,
-                messages = new[] { new { role = "user", content = prompt } },
+                messages,
                 stream = true
             };
 
@@ -328,7 +347,7 @@ namespace Beam.Services
         }
 
         private static async Task StreamDirectAnthropicAsync(
-            string prompt,
+            IReadOnlyList<ChatMessage> messages,
             string model,
             string apiKey,
             Action<string> onDelta,
@@ -339,7 +358,7 @@ namespace Beam.Services
             {
                 model,
                 max_tokens = 2048,
-                messages = new[] { new { role = "user", content = prompt } },
+                messages,
                 stream = true
             };
 
