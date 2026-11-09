@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -38,7 +39,32 @@ namespace BeamInstaller
                 "Kestrel");
             TxtInstallDir.Text = defaultDir;
 
-            Loaded += MainWindow_Loaded;
+            if (_isSilentMode || _isUninstallMode)
+            {
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(async () =>
+                {
+                    if (_isUninstallMode)
+                    {
+                        await RunUninstallerFlowAsync();
+                    }
+                    else if (_isSilentMode)
+                    {
+                        ShowStep(2);
+                        if (!await PerformInstallationAsync())
+                        {
+                            System.Windows.Application.Current.Shutdown(1);
+                            return;
+                        }
+                        await LaunchInstalledKestrelAsync();
+                        Close();
+                        System.Windows.Application.Current.Shutdown(0);
+                    }
+                }));
+            }
+            else
+            {
+                Loaded += MainWindow_Loaded;
+            }
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -67,6 +93,7 @@ namespace BeamInstaller
                 }
                 await LaunchInstalledKestrelAsync();
                 Close();
+                System.Windows.Application.Current.Shutdown(0);
             }
         }
 
@@ -111,6 +138,12 @@ namespace BeamInstaller
             }
         }
 
+        private async void BtnAutoFix_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_currentStep != 4) return;
+            await PerformAutoDiagnoseAndFixAsync();
+        }
+
         private void BtnCancel_Click(object sender, MouseButtonEventArgs e)
         {
             if (_currentStep == 2) return; // Prevent accidental close mid-extraction
@@ -127,23 +160,31 @@ namespace BeamInstaller
 
             if (step == 1)
             {
+                BtnAutoFix.Visibility = Visibility.Collapsed;
+                FailureDetailBox.Visibility = Visibility.Collapsed;
                 BtnCancel.Visibility = Visibility.Visible;
                 BtnPrimary.Visibility = Visibility.Visible;
                 TxtPrimaryBtn.Text = "Install Kestrel";
             }
             else if (step == 2)
             {
+                BtnAutoFix.Visibility = Visibility.Collapsed;
+                FailureDetailBox.Visibility = Visibility.Collapsed;
                 BtnCancel.Visibility = Visibility.Collapsed;
                 BtnPrimary.Visibility = Visibility.Collapsed;
             }
             else if (step == 3)
             {
+                BtnAutoFix.Visibility = Visibility.Collapsed;
+                FailureDetailBox.Visibility = Visibility.Collapsed;
                 BtnCancel.Visibility = Visibility.Collapsed;
                 BtnPrimary.Visibility = Visibility.Visible;
                 TxtPrimaryBtn.Text = "Launch & Finish";
             }
             else if (step == 4)
             {
+                BtnAutoFix.Visibility = Visibility.Visible;
+                FailureDetailBox.Visibility = Visibility.Visible;
                 BtnCancel.Visibility = Visibility.Visible;
                 BtnPrimary.Visibility = Visibility.Visible;
                 TxtPrimaryBtn.Text = "Back to Setup";
@@ -178,6 +219,7 @@ namespace BeamInstaller
             bool configureHook = OptConfigureWinHook.IsChecked == true;
             Exception? failure = null;
             InstallingHeaderTitle.Text = "Installing Kestrel...";
+            Log($"PerformInstallationAsync started for dir: {installDir}");
 
             await Task.Run(async () =>
             {
@@ -185,17 +227,11 @@ namespace BeamInstaller
                 {
                     installDir = InstallationFiles.ValidateDirectory(installDir);
                     UpdateProgress("Closing active instances...", 15);
-                    foreach (var name in new[] { "Kestrel", "Beam" })
-                    {
-                        foreach (var p in Process.GetProcessesByName(name))
-                        {
-                            try { p.Kill(); p.WaitForExit(1500); } catch { }
-                        }
-                    }
-                    await Task.Delay(220);
+                    CloseConflictingProcesses();
+                    await Task.Delay(250);
 
                     UpdateProgress("Preparing installation folder...", 35);
-                    Directory.CreateDirectory(installDir);
+                    EnsureDirectoryReady(installDir);
 
                     string targetExe = Path.Combine(installDir, "Kestrel.exe");
                     string targetIco = Path.Combine(installDir, "beam.ico");
@@ -211,10 +247,39 @@ namespace BeamInstaller
                     await Task.Delay(240);
 
                     string uninstallerPath = Path.Combine(installDir, "Uninstall-Kestrel.exe");
-                    var currentInstallerExe = Process.GetCurrentProcess().MainModule?.FileName;
+                    var currentInstallerExe = Environment.ProcessPath;
                     if (!string.IsNullOrEmpty(currentInstallerExe) && File.Exists(currentInstallerExe))
                     {
-                        File.Copy(currentInstallerExe, uninstallerPath, true);
+                        bool copiedUninstaller = false;
+                        for (int attempt = 0; attempt < 5; attempt++)
+                        {
+                            try
+                            {
+                                if (File.Exists(uninstallerPath))
+                                {
+                                    try { File.SetAttributes(uninstallerPath, FileAttributes.Normal); } catch { }
+                                }
+                                File.Copy(currentInstallerExe, uninstallerPath, true);
+                                copiedUninstaller = true;
+                                break;
+                            }
+                            catch when (attempt < 4)
+                            {
+                                try
+                                {
+                                    string old = uninstallerPath + ".old." + Guid.NewGuid().ToString("N");
+                                    File.Move(uninstallerPath, old, true);
+                                    try { File.Delete(old); } catch { }
+                                }
+                                catch { }
+                                Thread.Sleep(200);
+                            }
+                        }
+
+                        if (!copiedUninstaller)
+                        {
+                            File.Copy(currentInstallerExe, uninstallerPath, true);
+                        }
                         DeleteFile(uninstallerPath + ":Zone.Identifier");
                     }
                     else throw new IOException("Cannot locate the setup executable to install the uninstaller.");
@@ -311,16 +376,174 @@ namespace BeamInstaller
 
             if (failure != null)
             {
+                Log($"PerformInstallationAsync failed: {failure}");
                 _installedExePath = string.Empty;
                 Environment.ExitCode = 1;
                 ShowStep(4);
                 InstallingHeaderTitle.Text = "Installation failed";
                 UpdateProgress(failure.Message, 0);
+
+                if (failure is UnauthorizedAccessException || failure.Message.Contains("denied", StringComparison.OrdinalIgnoreCase))
+                {
+                    FailureDiagnosticText.Text = "Diagnosis: Access is locked by a running instance of Kestrel or background process.\n" +
+                                                  "Click 'Auto Diagnose & Fix' to terminate conflicting processes, repair access, and finish setup automatically.";
+                }
+                else if (failure is IOException || failure.Message.Contains("used by another process", StringComparison.OrdinalIgnoreCase))
+                {
+                    FailureDiagnosticText.Text = "Diagnosis: Files in the installation folder are held open by Windows.\n" +
+                                                  "Click 'Auto Diagnose & Fix' to release file handles and resume installation.";
+                }
+                else
+                {
+                    FailureDiagnosticText.Text = $"Diagnosis: {failure.Message}\n" +
+                                                  "Click 'Auto Diagnose & Fix' to scan for conflicts and resolve automatically.";
+                }
                 return false;
             }
+            Log("PerformInstallationAsync completed successfully.");
             Environment.ExitCode = 0;
             ShowStep(3);
             return true;
+        }
+
+        private static void CloseConflictingProcesses()
+        {
+            string[] names = { "Kestrel", "Beam", "Uninstall-Kestrel" };
+            int currentPid = Environment.ProcessId;
+
+            foreach (var name in names)
+            {
+                foreach (var p in Process.GetProcessesByName(name))
+                {
+                    if (p.Id == currentPid) continue;
+                    try { p.Kill(); p.WaitForExit(1000); } catch { }
+                }
+            }
+
+            foreach (var name in names)
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo("taskkill.exe", $"/F /T /IM {name}.exe")
+                    {
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    using var proc = Process.Start(psi);
+                    proc?.WaitForExit(800);
+                }
+                catch { }
+            }
+        }
+
+        private static void EnsureDirectoryReady(string installDir)
+        {
+            Exception? lastEx = null;
+            for (int attempt = 0; attempt < 6; attempt++)
+            {
+                try
+                {
+                    if (!Directory.Exists(installDir))
+                    {
+                        Directory.CreateDirectory(installDir);
+                    }
+                    else
+                    {
+                        var di = new DirectoryInfo(installDir);
+                        di.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.Hidden);
+                    }
+
+                    string probe = Path.Combine(installDir, ".probe." + Guid.NewGuid().ToString("N") + ".tmp");
+                    File.WriteAllText(probe, "ok");
+                    File.Delete(probe);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastEx = ex;
+                    try
+                    {
+                        string user = Environment.UserName;
+                        var psi = new ProcessStartInfo("icacls.exe", $"\"{installDir}\" /grant \"{user}:(OI)(CI)F\" /T /Q /C")
+                        {
+                            CreateNoWindow = true,
+                            UseShellExecute = false
+                        };
+                        using var proc = Process.Start(psi);
+                        proc?.WaitForExit(1000);
+                    }
+                    catch { }
+                    Thread.Sleep(250);
+                }
+            }
+
+            if (lastEx != null)
+            {
+                throw lastEx;
+            }
+        }
+
+        private async Task PerformAutoDiagnoseAndFixAsync()
+        {
+            ShowStep(2);
+            InstallingHeaderTitle.Text = "Diagnosing & Auto-Fixing...";
+            UpdateProgress("Scanning system for locks and conflicting processes...", 15);
+
+            string installDir = TxtInstallDir.Text.Trim();
+            if (string.IsNullOrWhiteSpace(installDir))
+            {
+                installDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Programs",
+                    "Kestrel");
+            }
+
+            await Task.Run(async () =>
+            {
+                // Stage 1: Terminate all running Kestrel / Beam / uninstaller processes
+                UpdateProgress("Terminating locking processes and handlers...", 30);
+                CloseConflictingProcesses();
+                await Task.Delay(350);
+
+                // Stage 2: Clear file attributes, remove read-only, remove old temp/backup files
+                UpdateProgress("Clearing file locks and stale temporary files...", 55);
+                try
+                {
+                    if (Directory.Exists(installDir))
+                    {
+                        var di = new DirectoryInfo(installDir);
+                        di.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.Hidden);
+
+                        foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
+                        {
+                            try { f.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.Hidden); } catch { }
+                        }
+
+                        foreach (var f in Directory.GetFiles(installDir, "*.tmp", SearchOption.TopDirectoryOnly))
+                        {
+                            try { File.Delete(f); } catch { }
+                        }
+                        foreach (var f in Directory.GetFiles(installDir, "*.old*", SearchOption.TopDirectoryOnly))
+                        {
+                            try { File.Delete(f); } catch { }
+                        }
+                    }
+                }
+                catch { }
+
+                // Stage 3: Repair directory permissions
+                UpdateProgress("Granting write access permissions on destination...", 75);
+                try
+                {
+                    EnsureDirectoryReady(installDir);
+                }
+                catch { }
+
+                await Task.Delay(300);
+            });
+
+            UpdateProgress("Resuming installation...", 85);
+            await PerformInstallationAsync();
         }
 
         private static void ExtractPayload(string targetExe, string targetIco)
@@ -350,12 +573,63 @@ namespace BeamInstaller
                     stream.CopyTo(file);
                     file.Flush(true);
                 }
-                File.Move(temporary, destination, overwrite: true);
+
+                bool moved = false;
+                for (int attempt = 0; attempt < 5; attempt++)
+                {
+                    try
+                    {
+                        if (File.Exists(destination))
+                        {
+                            try { File.SetAttributes(destination, FileAttributes.Normal); } catch { }
+                        }
+                        File.Move(temporary, destination, overwrite: true);
+                        moved = true;
+                        break;
+                    }
+                    catch when (attempt < 4)
+                    {
+                        Thread.Sleep(200);
+                    }
+                }
+
+                if (!moved && File.Exists(destination))
+                {
+                    // Fallback: Windows permits renaming an in-use executable, freeing up the primary path
+                    string oldBackup = destination + ".old." + Guid.NewGuid().ToString("N");
+                    try
+                    {
+                        File.Move(destination, oldBackup, overwrite: true);
+                        File.Move(temporary, destination, overwrite: true);
+                        moved = true;
+                        try { File.Delete(oldBackup); } catch { }
+                    }
+                    catch { }
+                }
+
+                if (!moved)
+                {
+                    File.Move(temporary, destination, overwrite: true);
+                }
             }
             finally
             {
-                if (File.Exists(temporary)) File.Delete(temporary);
+                if (File.Exists(temporary))
+                {
+                    try { File.Delete(temporary); } catch { }
+                }
             }
+        }
+
+        private static void Log(string msg)
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kestrel");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "setup.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
+            }
+            catch { }
         }
 
         private async Task LaunchInstalledKestrelAsync()
@@ -364,18 +638,22 @@ namespace BeamInstaller
             {
                 if (!string.IsNullOrEmpty(_installedExePath) && File.Exists(_installedExePath))
                 {
+                    Log($"Launching installed Kestrel: {_installedExePath}");
                     var psi = new ProcessStartInfo
                     {
                         FileName = _installedExePath,
                         Arguments = "--replace",
                         WorkingDirectory = Path.GetDirectoryName(_installedExePath) ?? "",
-                        UseShellExecute = false
+                        UseShellExecute = true
                     };
                     Process.Start(psi);
                     await Task.Delay(350);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log($"LaunchInstalledKestrelAsync error: {ex}");
+            }
         }
 
         private async Task RunUninstallerFlowAsync()

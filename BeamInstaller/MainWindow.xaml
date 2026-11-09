@@ -229,6 +229,25 @@
                                FontSize="11.5"
                                FontWeight="SemiBold"
                                HorizontalAlignment="Center" />
+
+                    <!-- Failure Diagnostic Card (Shown only in step 4) -->
+                    <Border x:Name="FailureDetailBox"
+                            Visibility="Collapsed"
+                            Background="#151821"
+                            BorderBrush="#2B3142"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="14,10"
+                            Margin="0,14,0,0">
+                        <StackPanel>
+                            <TextBlock x:Name="FailureDiagnosticText"
+                                       Text="Detected locked files or access restrictions in the target path. Click 'Auto Diagnose &amp; Fix' to terminate conflicting background processes, repair folder access, and complete setup automatically."
+                                       Foreground="#9CA3AF"
+                                       FontSize="11.5"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- ========================================================= -->
@@ -287,6 +306,23 @@
                     <TextBlock Text="Noventra-Labs" Foreground="#6B7280" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="Visit https://github.com/Noventra-labs/Kestrel" />
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Border x:Name="BtnAutoFix"
+                                Visibility="Collapsed"
+                                Background="#2563EB"
+                                BorderBrush="#3B82F6"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="15,7"
+                                Margin="0,0,8,0"
+                                Cursor="Hand"
+                                MouseLeftButtonDown="BtnAutoFix_Click">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Width="11" Height="11" Stretch="Uniform" Fill="#FFFFFF" Margin="0,0,6,0"
+                                      Data="M 7,0 L 9,5 L 14,7 L 9,9 L 7,14 L 5,9 L 0,7 L 5,5 Z" />
+                                <TextBlock x:Name="TxtAutoFixBtn" Text="Auto Diagnose &amp; Fix" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+
                         <Border x:Name="BtnCancel"
                                 Background="#171B24"
                                 BorderBrush="#282F3E"

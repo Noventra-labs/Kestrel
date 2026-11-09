@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Windows;
 
@@ -8,6 +9,28 @@ namespace BeamInstaller
     {
         protected override void OnStartup(StartupEventArgs e)
         {
+            AppDomain.CurrentDomain.UnhandledException += (s, ev) =>
+            {
+                try
+                {
+                    string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kestrel");
+                    Directory.CreateDirectory(dir);
+                    File.AppendAllText(Path.Combine(dir, "setup.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [Unhandled] {ev.ExceptionObject}{Environment.NewLine}");
+                }
+                catch { }
+            };
+
+            DispatcherUnhandledException += (s, ev) =>
+            {
+                try
+                {
+                    string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kestrel");
+                    Directory.CreateDirectory(dir);
+                    File.AppendAllText(Path.Combine(dir, "setup.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [DispatcherUnhandled] {ev.Exception}{Environment.NewLine}");
+                }
+                catch { }
+            };
+
             base.OnStartup(e);
 
             bool isUninstall = e.Args.Any(a =>
