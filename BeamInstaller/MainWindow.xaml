@@ -92,7 +92,7 @@
                             CornerRadius="5"
                             Background="Transparent"
                             Cursor="Hand"
-                            MouseLeftButtonDown="BtnCancel_Click">
+                            MouseLeftButtonDown="BtnSecondary_Click">
                         <TextBlock Text="✕" Foreground="#6B7280" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                 </Grid>
@@ -241,7 +241,7 @@
                             Margin="0,14,0,0">
                         <StackPanel>
                             <TextBlock x:Name="FailureDiagnosticText"
-                                       Text="Detected locked files or access restrictions in the target path. Click 'Auto Diagnose &amp; Fix' to terminate conflicting background processes, repair folder access, and complete setup automatically."
+                                       Text="A conflicting process or file restriction was encountered. Click 'Retry &amp; Auto-Fix' to terminate conflicts, repair permissions, and finish setup automatically."
                                        Foreground="#9CA3AF"
                                        FontSize="11.5"
                                        TextWrapping="Wrap"
@@ -306,24 +306,8 @@
                     <TextBlock Text="Noventra-Labs" Foreground="#6B7280" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="Visit https://github.com/Noventra-labs/Kestrel" />
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Border x:Name="BtnAutoFix"
-                                Visibility="Collapsed"
-                                Background="#2563EB"
-                                BorderBrush="#3B82F6"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="15,7"
-                                Margin="0,0,8,0"
-                                Cursor="Hand"
-                                MouseLeftButtonDown="BtnAutoFix_Click">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Width="11" Height="11" Stretch="Uniform" Fill="#FFFFFF" Margin="0,0,6,0"
-                                      Data="M 7,0 L 9,5 L 14,7 L 9,9 L 7,14 L 5,9 L 0,7 L 5,5 Z" />
-                                <TextBlock x:Name="TxtAutoFixBtn" Text="Auto Diagnose &amp; Fix" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border x:Name="BtnCancel"
+                        <!-- Secondary Action (Cancel / Back) -->
+                        <Border x:Name="BtnSecondary"
                                 Background="#171B24"
                                 BorderBrush="#282F3E"
                                 BorderThickness="1"
@@ -331,10 +315,11 @@
                                 Padding="16,7"
                                 Margin="0,0,8,0"
                                 Cursor="Hand"
-                                MouseLeftButtonDown="BtnCancel_Click">
-                            <TextBlock Text="Cancel" Foreground="#9CA3AF" FontSize="12" FontWeight="Medium" />
+                                MouseLeftButtonDown="BtnSecondary_Click">
+                            <TextBlock x:Name="TxtSecondaryBtn" Text="Cancel" Foreground="#9CA3AF" FontSize="12" FontWeight="Medium" />
                         </Border>
 
+                        <!-- Primary Action (Install / Finish / Retry) - Unified Brand Color -->
                         <Border x:Name="BtnPrimary"
                                 Background="#FF6363"
                                 CornerRadius="6"

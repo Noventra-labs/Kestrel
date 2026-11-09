@@ -114,11 +114,6 @@ namespace BeamInstaller
 
         private async void BtnPrimary_Click(object sender, MouseButtonEventArgs e)
         {
-            if (_currentStep == 4)
-            {
-                ShowStep(1);
-                return;
-            }
             if (_currentStep == 1)
             {
                 ShowStep(2);
@@ -136,18 +131,23 @@ namespace BeamInstaller
 
                 System.Windows.Application.Current.Shutdown();
             }
+            else if (_currentStep == 4)
+            {
+                await PerformAutoDiagnoseAndFixAsync();
+            }
         }
 
-        private async void BtnAutoFix_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (_currentStep != 4) return;
-            await PerformAutoDiagnoseAndFixAsync();
-        }
-
-        private void BtnCancel_Click(object sender, MouseButtonEventArgs e)
+        private void BtnSecondary_Click(object sender, MouseButtonEventArgs e)
         {
             if (_currentStep == 2) return; // Prevent accidental close mid-extraction
-            System.Windows.Application.Current.Shutdown();
+            if (_currentStep == 4)
+            {
+                ShowStep(1);
+            }
+            else
+            {
+                System.Windows.Application.Current.Shutdown();
+            }
         }
 
         private void ShowStep(int step)
@@ -160,34 +160,32 @@ namespace BeamInstaller
 
             if (step == 1)
             {
-                BtnAutoFix.Visibility = Visibility.Collapsed;
                 FailureDetailBox.Visibility = Visibility.Collapsed;
-                BtnCancel.Visibility = Visibility.Visible;
+                BtnSecondary.Visibility = Visibility.Visible;
+                TxtSecondaryBtn.Text = "Cancel";
                 BtnPrimary.Visibility = Visibility.Visible;
                 TxtPrimaryBtn.Text = "Install Kestrel";
             }
             else if (step == 2)
             {
-                BtnAutoFix.Visibility = Visibility.Collapsed;
                 FailureDetailBox.Visibility = Visibility.Collapsed;
-                BtnCancel.Visibility = Visibility.Collapsed;
+                BtnSecondary.Visibility = Visibility.Collapsed;
                 BtnPrimary.Visibility = Visibility.Collapsed;
             }
             else if (step == 3)
             {
-                BtnAutoFix.Visibility = Visibility.Collapsed;
                 FailureDetailBox.Visibility = Visibility.Collapsed;
-                BtnCancel.Visibility = Visibility.Collapsed;
+                BtnSecondary.Visibility = Visibility.Collapsed;
                 BtnPrimary.Visibility = Visibility.Visible;
-                TxtPrimaryBtn.Text = "Launch & Finish";
+                TxtPrimaryBtn.Text = "Finish";
             }
             else if (step == 4)
             {
-                BtnAutoFix.Visibility = Visibility.Visible;
                 FailureDetailBox.Visibility = Visibility.Visible;
-                BtnCancel.Visibility = Visibility.Visible;
+                BtnSecondary.Visibility = Visibility.Visible;
+                TxtSecondaryBtn.Text = "Back";
                 BtnPrimary.Visibility = Visibility.Visible;
-                TxtPrimaryBtn.Text = "Back to Setup";
+                TxtPrimaryBtn.Text = "Retry & Auto-Fix";
             }
         }
 
@@ -386,17 +384,17 @@ namespace BeamInstaller
                 if (failure is UnauthorizedAccessException || failure.Message.Contains("denied", StringComparison.OrdinalIgnoreCase))
                 {
                     FailureDiagnosticText.Text = "Diagnosis: Access is locked by a running instance of Kestrel or background process.\n" +
-                                                  "Click 'Auto Diagnose & Fix' to terminate conflicting processes, repair access, and finish setup automatically.";
+                                                  "Click 'Retry & Auto-Fix' to terminate conflicting processes, repair access, and finish setup automatically.";
                 }
                 else if (failure is IOException || failure.Message.Contains("used by another process", StringComparison.OrdinalIgnoreCase))
                 {
                     FailureDiagnosticText.Text = "Diagnosis: Files in the installation folder are held open by Windows.\n" +
-                                                  "Click 'Auto Diagnose & Fix' to release file handles and resume installation.";
+                                                  "Click 'Retry & Auto-Fix' to release file handles and resume installation.";
                 }
                 else
                 {
                     FailureDiagnosticText.Text = $"Diagnosis: {failure.Message}\n" +
-                                                  "Click 'Auto Diagnose & Fix' to scan for conflicts and resolve automatically.";
+                                                  "Click 'Retry & Auto-Fix' to scan for conflicts and resolve automatically.";
                 }
                 return false;
             }
@@ -413,15 +411,6 @@ namespace BeamInstaller
 
             foreach (var name in names)
             {
-                foreach (var p in Process.GetProcessesByName(name))
-                {
-                    if (p.Id == currentPid) continue;
-                    try { p.Kill(); p.WaitForExit(1000); } catch { }
-                }
-            }
-
-            foreach (var name in names)
-            {
                 try
                 {
                     var psi = new ProcessStartInfo("taskkill.exe", $"/F /T /IM {name}.exe")
@@ -430,9 +419,18 @@ namespace BeamInstaller
                         UseShellExecute = false
                     };
                     using var proc = Process.Start(psi);
-                    proc?.WaitForExit(800);
+                    proc?.WaitForExit(1000);
                 }
                 catch { }
+            }
+
+            foreach (var name in names)
+            {
+                foreach (var p in Process.GetProcessesByName(name))
+                {
+                    if (p.Id == currentPid) continue;
+                    try { p.Kill(); p.WaitForExit(1000); } catch { }
+                }
             }
         }
 
@@ -449,9 +447,40 @@ namespace BeamInstaller
                     }
                     else
                     {
-                        var di = new DirectoryInfo(installDir);
-                        di.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.Hidden);
+                        // Clear read-only from files (never touch folder attributes directly)
+                        foreach (var file in Directory.GetFiles(installDir))
+                        {
+                            try { File.SetAttributes(file, FileAttributes.Normal); } catch { }
+                        }
                     }
+
+                    // Remove stale temporary and backup files
+                    try
+                    {
+                        foreach (var tmp in Directory.GetFiles(installDir, "*.tmp"))
+                        {
+                            try { File.Delete(tmp); } catch { }
+                        }
+                        foreach (var old in Directory.GetFiles(installDir, "*.old*"))
+                        {
+                            try { File.Delete(old); } catch { }
+                        }
+                    }
+                    catch { }
+
+                    // Grant full permissions via icacls (elevated as Administrator)
+                    try
+                    {
+                        string user = Environment.UserName;
+                        var psi = new ProcessStartInfo("icacls.exe", $"\"{installDir}\" /grant \"{user}:(OI)(CI)F\" /grant \"*S-1-5-32-544:(OI)(CI)F\" /grant \"*S-1-5-18:(OI)(CI)F\" /T /Q /C")
+                        {
+                            CreateNoWindow = true,
+                            UseShellExecute = false
+                        };
+                        using var proc = Process.Start(psi);
+                        proc?.WaitForExit(1000);
+                    }
+                    catch { }
 
                     string probe = Path.Combine(installDir, ".probe." + Guid.NewGuid().ToString("N") + ".tmp");
                     File.WriteAllText(probe, "ok");
@@ -461,18 +490,6 @@ namespace BeamInstaller
                 catch (Exception ex)
                 {
                     lastEx = ex;
-                    try
-                    {
-                        string user = Environment.UserName;
-                        var psi = new ProcessStartInfo("icacls.exe", $"\"{installDir}\" /grant \"{user}:(OI)(CI)F\" /T /Q /C")
-                        {
-                            CreateNoWindow = true,
-                            UseShellExecute = false
-                        };
-                        using var proc = Process.Start(psi);
-                        proc?.WaitForExit(1000);
-                    }
-                    catch { }
                     Thread.Sleep(250);
                 }
             }
@@ -486,7 +503,7 @@ namespace BeamInstaller
         private async Task PerformAutoDiagnoseAndFixAsync()
         {
             ShowStep(2);
-            InstallingHeaderTitle.Text = "Diagnosing & Auto-Fixing...";
+            InstallingHeaderTitle.Text = "Diagnosing & Repairing...";
             UpdateProgress("Scanning system for locks and conflicting processes...", 15);
 
             string installDir = TxtInstallDir.Text.Trim();
@@ -511,12 +528,9 @@ namespace BeamInstaller
                 {
                     if (Directory.Exists(installDir))
                     {
-                        var di = new DirectoryInfo(installDir);
-                        di.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.Hidden);
-
-                        foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
+                        foreach (var f in Directory.GetFiles(installDir))
                         {
-                            try { f.Attributes &= ~(FileAttributes.ReadOnly | FileAttributes.Hidden); } catch { }
+                            try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
                         }
 
                         foreach (var f in Directory.GetFiles(installDir, "*.tmp", SearchOption.TopDirectoryOnly))
@@ -526,6 +540,18 @@ namespace BeamInstaller
                         foreach (var f in Directory.GetFiles(installDir, "*.old*", SearchOption.TopDirectoryOnly))
                         {
                             try { File.Delete(f); } catch { }
+                        }
+
+                        // Rename any locked exe to unlock the file path
+                        string targetExe = Path.Combine(installDir, "Kestrel.exe");
+                        if (File.Exists(targetExe))
+                        {
+                            try
+                            {
+                                string old = targetExe + ".old." + Guid.NewGuid().ToString("N");
+                                File.Move(targetExe, old, overwrite: true);
+                            }
+                            catch { }
                         }
                     }
                 }

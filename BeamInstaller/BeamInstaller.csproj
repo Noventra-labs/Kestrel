@@ -10,6 +10,7 @@
     <AssemblyName>Kestrel-Setup</AssemblyName>
     <RootNamespace>BeamInstaller</RootNamespace>
     <ApplicationIcon>..\Beam\beam.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>2.3.1</Version>
     <FileVersion>2.3.1.0</FileVersion>
     <AssemblyVersion>2.3.1.0</AssemblyVersion>
