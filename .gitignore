@@ -41,3 +41,8 @@ env/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Internal Engineering Docs (Local Retrospectives & Architectural Notes)
+docs/
+docs
+

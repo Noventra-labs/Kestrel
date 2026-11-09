@@ -55,6 +55,7 @@ namespace Beam
         private Forms.NotifyIcon? _notifyIcon;
         private GlobalKeyboardHook? _keyboardHook;
         private DispatcherTimer? _watchdogTimer;
+        private DispatcherTimer? _autoMemReductTimer;
         private BeamSettings _settings = new();
 
         public MainWindow()
@@ -120,6 +121,39 @@ namespace Beam
                 }
             };
             _watchdogTimer.Start();
+
+            // Start 30s Auto Mem Reduct background monitor matching henrypp/memreduct cooldown
+            _autoMemReductTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(30)
+            };
+            _autoMemReductTimer.Tick += async (_, _) =>
+            {
+                try
+                {
+                    if (_settings.EnableMemReduct && _settings.AutoMemReductEnabled && MemoryReductService.CanAutoClean)
+                    {
+                        var stats = MemoryReductService.GetMemoryStats();
+                        if (stats.LoadPercent >= _settings.AutoMemReductThreshold)
+                        {
+                            var res = await MemoryReductService.ReduceMemoryAsync(
+                                purgeStandby: MemoryReductService.IsElevated,
+                                flushModified: MemoryReductService.IsElevated,
+                                sweepProcesses: true);
+
+                            if (res.FreedMb >= 10)
+                            {
+                                ToastNotification.Show(
+                                    res.IsElevated
+                                        ? $"✓ Auto Mem Reduct: RAM {res.LoadBefore}% → {res.LoadAfter}% • Freed {res.FreedMb:N0} MB"
+                                        : $"✓ Auto Mem Reduct: Swept {res.ProcessesCleaned} apps • Freed {res.FreedMb:N0} MB RAM");
+                            }
+                        }
+                    }
+                }
+                catch { }
+            };
+            _autoMemReductTimer.Start();
 
             SystemEvents.PowerModeChanged += OnSystemPowerOrSessionChanged;
             SystemEvents.SessionSwitch += OnSystemPowerOrSessionChanged;

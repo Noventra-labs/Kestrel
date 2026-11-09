@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Threading.Tasks;
 
 namespace Beam.Services
@@ -26,17 +28,29 @@ namespace Beam.Services
         public double UsedPhysGbBefore { get; set; }
         public double UsedPhysGbAfter { get; set; }
         public bool StandbyPurged { get; set; }
+        public bool WorkingSetsSwept { get; set; }
+        public bool FileCacheFlushed { get; set; }
+        public bool ModifiedListFlushed { get; set; }
         public int ProcessesCleaned { get; set; }
+        public bool IsElevated { get; set; }
     }
 
     /// <summary>
     /// Low-Level Windows NT Memory Management & Reduction Engine.
-    /// Inspired by henrypp/memreduct (https://github.com/henrypp/memreduct).
+    /// Aligned with the official henrypp/memreduct architecture (https://github.com/henrypp/memreduct).
+    /// Supports a Dual-Mode/Hybrid Execution Model:
+    /// - Non-elevated: Least-privilege process working set sweep + .NET GC (instant, zero-prompt).
+    /// - Elevated / Headless worker: Deep NT kernel cache flushing (Standby, Modified, System File Cache, Deduplication).
     /// </summary>
     public static class MemoryReductService
     {
+        // NT Information Classes
+        private const int SystemFileCacheInformation = 21;
         private const int SystemMemoryListInformation = 80;
+        private const int SystemCombinePhysicalMemoryInformation = 130;
+        private const int SystemRegistryReconciliationInformation = 134;
 
+        // SYSTEM_MEMORY_LIST_COMMAND enum matching ntdll / ntexapi.h & henrypp/memreduct
         private enum MemoryListCommand : int
         {
             MemoryCaptureAccessedBits = 0,
@@ -62,6 +76,52 @@ namespace Beam.Services
             public ulong ullAvailExtendedVirtual;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SYSTEM_FILECACHE_INFORMATION
+        {
+            public IntPtr CurrentSize;
+            public IntPtr PeakSize;
+            public uint PageFaultCount;
+            public IntPtr MinimumWorkingSet;
+            public IntPtr MaximumWorkingSet;
+            public IntPtr CurrentSizeIncludingTransitionInPages;
+            public IntPtr PeakSizeIncludingTransitionInPages;
+            public uint TransitionRePurposeCount;
+            public uint Flags;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MEMORY_COMBINE_INFORMATION_EX
+        {
+            public IntPtr Handle;
+            public IntPtr PagesCombined;
+            public uint Flags;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LUID
+        {
+            public uint LowPart;
+            public int HighPart;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TOKEN_PRIVILEGES
+        {
+            public uint PrivilegeCount;
+            public LUID Luid;
+            public uint Attributes;
+        }
+
+        private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
+        private const uint TOKEN_QUERY = 0x0008;
+        private const uint SE_PRIVILEGE_ENABLED = 0x00000002;
+        private const string SE_INCREASE_QUOTA_NAME = "SeIncreaseQuotaPrivilege";
+        private const string SE_PROFILE_SINGLE_PROCESS_NAME = "SeProfileSingleProcessPrivilege";
+
+        private const uint PROCESS_SET_QUOTA = 0x0100;
+        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
@@ -70,7 +130,14 @@ namespace Beam.Services
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool EmptyWorkingSet(IntPtr hProcess);
 
-        [DllImport("ntdll.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint processAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("ntdll.dll", ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
         private static extern int NtSetSystemInformation(
             int SystemInformationClass,
             IntPtr SystemInformation,
@@ -94,32 +161,37 @@ namespace Beam.Services
             IntPtr PreviousState,
             IntPtr ReturnLength);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct LUID
-        {
-            public uint LowPart;
-            public int HighPart;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct TOKEN_PRIVILEGES
-        {
-            public uint PrivilegeCount;
-            public LUID Luid;
-            public uint Attributes;
-        }
-
-        private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
-        private const uint TOKEN_QUERY = 0x0008;
-        private const uint SE_PRIVILEGE_ENABLED = 0x00000002;
-        private const string SE_INCREASE_QUOTA_NAME = "SeIncreaseQuotaPrivilege";
-        private const string SE_PROFILE_SINGLE_PROCESS_NAME = "SeProfileSingleProcessPrivilege";
-
         private static bool _privilegesAcquired = false;
+        private static readonly object _syncLock = new object();
+        private static DateTime _lastCleanTime = DateTime.MinValue;
+        public const int AutoReductCooldownSeconds = 30;
+
+        public static bool IsElevated
+        {
+            get
+            {
+                try
+                {
+                    using var id = WindowsIdentity.GetCurrent();
+                    return new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        public static bool CanAutoClean
+        {
+            get
+            {
+                lock (_syncLock)
+                {
+                    return (DateTime.UtcNow - _lastCleanTime).TotalSeconds >= AutoReductCooldownSeconds;
+                }
+            }
+        }
 
         public static MemoryStats GetMemoryStats()
         {
@@ -142,9 +214,9 @@ namespace Beam.Services
             };
         }
 
-        private static void EnsurePrivileges()
+        public static bool EnsurePrivileges()
         {
-            if (_privilegesAcquired) return;
+            if (_privilegesAcquired) return true;
 
             try
             {
@@ -152,9 +224,10 @@ namespace Beam.Services
                 {
                     try
                     {
-                        EnablePrivilege(hToken, SE_INCREASE_QUOTA_NAME);
-                        EnablePrivilege(hToken, SE_PROFILE_SINGLE_PROCESS_NAME);
-                        _privilegesAcquired = true;
+                        bool quotaOk = EnablePrivilege(hToken, SE_INCREASE_QUOTA_NAME);
+                        bool profileOk = EnablePrivilege(hToken, SE_PROFILE_SINGLE_PROCESS_NAME);
+                        _privilegesAcquired = quotaOk && profileOk;
+                        return _privilegesAcquired;
                     }
                     finally
                     {
@@ -163,20 +236,29 @@ namespace Beam.Services
                 }
             }
             catch { }
+
+            return false;
         }
 
-        private static void EnablePrivilege(IntPtr hToken, string privilege)
+        private static bool EnablePrivilege(IntPtr hToken, string privilege)
         {
-            if (LookupPrivilegeValue(null, privilege, out var luid))
+            if (!LookupPrivilegeValue(null, privilege, out var luid))
+                return false;
+
+            var tp = new TOKEN_PRIVILEGES
             {
-                var tp = new TOKEN_PRIVILEGES
-                {
-                    PrivilegeCount = 1,
-                    Luid = luid,
-                    Attributes = SE_PRIVILEGE_ENABLED
-                };
-                AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
-            }
+                PrivilegeCount = 1,
+                Luid = luid,
+                Attributes = SE_PRIVILEGE_ENABLED
+            };
+
+            if (!AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
+                return false;
+
+            // In Win32, AdjustTokenPrivileges returns TRUE even if the privilege was not assigned.
+            // We must verify GetLastWin32Error() == ERROR_SUCCESS (0).
+            // Error 1300 (0x514) = ERROR_NOT_ALL_ASSIGNED.
+            return Marshal.GetLastWin32Error() == 0;
         }
 
         private static bool ExecuteMemoryListCommand(MemoryListCommand command)
@@ -200,64 +282,258 @@ namespace Beam.Services
             }
         }
 
-        public static MemoryCleanResult ReduceMemory(bool purgeStandby = true, bool flushModified = true, bool sweepProcesses = true)
+        private static bool FlushSystemFileCache()
         {
-            var before = GetMemoryStats();
-            int procsCleaned = 0;
+            EnsurePrivileges();
 
-            // 1. Flush managed .NET GC first
+            var sfci = new SYSTEM_FILECACHE_INFORMATION
+            {
+                MinimumWorkingSet = (IntPtr)(-1),
+                MaximumWorkingSet = (IntPtr)(-1)
+            };
+
+            int size = Marshal.SizeOf<SYSTEM_FILECACHE_INFORMATION>();
+            IntPtr pBuf = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(sfci, pBuf, false);
+                int status = NtSetSystemInformation(SystemFileCacheInformation, pBuf, size);
+                return status >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pBuf);
+            }
+        }
+
+        private static bool FlushRegistryCache()
+        {
+            try
+            {
+                int status = NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0);
+                return status >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool CombineMemoryLists()
+        {
+            try
+            {
+                var combine = new MEMORY_COMBINE_INFORMATION_EX();
+                int size = Marshal.SizeOf<MEMORY_COMBINE_INFORMATION_EX>();
+                IntPtr pBuf = Marshal.AllocHGlobal(size);
+                try
+                {
+                    Marshal.StructureToPtr(combine, pBuf, false);
+                    int status = NtSetSystemInformation(SystemCombinePhysicalMemoryInformation, pBuf, size);
+                    return status >= 0;
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(pBuf);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static int SweepProcessWorkingSets()
+        {
+            int procsCleaned = 0;
+            int currentId = Process.GetCurrentProcess().Id;
+
+            // 1. Flush current process managed GC & local working set
             try
             {
                 GC.Collect(2, GCCollectionMode.Forced, true, true);
                 GC.WaitForPendingFinalizers();
                 GC.Collect(2, GCCollectionMode.Forced, true, true);
+                EmptyWorkingSet(Process.GetCurrentProcess().Handle);
+                procsCleaned++;
             }
             catch { }
 
-            // 2. Empty System Working Sets via NT kernel
-            ExecuteMemoryListCommand(MemoryListCommand.MemoryEmptyWorkingSets);
+            // 2. Iterate all accessible user processes with least-privilege OpenProcess
+            Process[] processes;
+            try
+            {
+                processes = Process.GetProcesses();
+            }
+            catch
+            {
+                return procsCleaned;
+            }
 
-            // 3. Sweep all accessible user process working sets
-            if (sweepProcesses)
+            foreach (var proc in processes)
             {
                 try
                 {
-                    var processes = Process.GetProcesses();
-                    foreach (var proc in processes)
+                    int pid = proc.Id;
+                    if (pid <= 4 || pid == currentId) continue;
+
+                    IntPtr hProcess = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+                    if (hProcess != IntPtr.Zero)
                     {
                         try
                         {
-                            if (!proc.HasExited && proc.Id > 4)
+                            if (EmptyWorkingSet(hProcess))
                             {
-                                if (EmptyWorkingSet(proc.Handle))
-                                {
-                                    procsCleaned++;
-                                }
+                                procsCleaned++;
                             }
                         }
-                        catch { }
                         finally
                         {
-                            proc.Dispose();
+                            CloseHandle(hProcess);
                         }
                     }
                 }
                 catch { }
+                finally
+                {
+                    proc.Dispose();
+                }
             }
 
-            // 4. Flush Modified Page List
-            if (flushModified)
+            return procsCleaned;
+        }
+
+        public static bool LaunchElevatedWorker(string argument = "--clean-memory-standby")
+        {
+            try
             {
+                string? exe = Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
+                {
+                    exe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Kestrel.exe");
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = argument,
+                    Verb = "runas",
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+
+                using var proc = Process.Start(psi);
+                if (proc != null)
+                {
+                    proc.WaitForExit(7000);
+                    return proc.ExitCode == 0;
+                }
+                return false;
+            }
+            catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                // ERROR_CANCELLED (The user dismissed/cancelled the UAC prompt)
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static int ExecuteHeadlessWorker(bool purgeStandbyOnly)
+        {
+            EnsurePrivileges();
+
+            if (purgeStandbyOnly)
+            {
+                ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeLowPriorityStandbyList);
+                ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeStandbyList);
+            }
+            else
+            {
+                ExecuteMemoryListCommand(MemoryListCommand.MemoryEmptyWorkingSets);
+                FlushSystemFileCache();
                 ExecuteMemoryListCommand(MemoryListCommand.MemoryFlushModifiedList);
+                ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeLowPriorityStandbyList);
+                ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeStandbyList);
+                FlushRegistryCache();
+                CombineMemoryLists();
+                SweepProcessWorkingSets();
             }
 
-            // 5. Purge Windows Standby Lists (turning standby cached memory into free physical RAM)
+            return 0;
+        }
+
+        public static MemoryCleanResult ReduceMemory(
+            bool purgeStandby = true,
+            bool flushModified = true,
+            bool sweepProcesses = true,
+            bool promptElevationIfRequired = false)
+        {
+            var before = GetMemoryStats();
+            int procsCleaned = 0;
             bool standbyPurged = false;
-            if (purgeStandby)
+            bool fileCacheFlushed = false;
+            bool modifiedListFlushed = false;
+            bool workingSetsKernelSwept = false;
+            bool elevated = IsElevated;
+
+            lock (_syncLock)
             {
-                bool r1 = ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeLowPriorityStandbyList);
-                bool r2 = ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeStandbyList);
-                standbyPurged = r1 || r2;
+                _lastCleanTime = DateTime.UtcNow;
+            }
+
+            // 1. Process Working Set Sweeping (least-privilege)
+            if (sweepProcesses)
+            {
+                procsCleaned = SweepProcessWorkingSets();
+            }
+
+            // 2. Kernel Memory List Operations
+            if (elevated)
+            {
+                EnsurePrivileges();
+
+                // Empty System & Process Working Sets via NT kernel
+                workingSetsKernelSwept = ExecuteMemoryListCommand(MemoryListCommand.MemoryEmptyWorkingSets);
+
+                // Flush System File Cache
+                fileCacheFlushed = FlushSystemFileCache();
+
+                // Flush Modified Page List
+                if (flushModified)
+                {
+                    modifiedListFlushed = ExecuteMemoryListCommand(MemoryListCommand.MemoryFlushModifiedList);
+                }
+
+                // Purge Windows Standby Lists
+                if (purgeStandby)
+                {
+                    bool r1 = ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeLowPriorityStandbyList);
+                    bool r2 = ExecuteMemoryListCommand(MemoryListCommand.MemoryPurgeStandbyList);
+                    standbyPurged = r1 || r2;
+                }
+
+                // Registry Reconciliation & Memory Combining
+                FlushRegistryCache();
+                CombineMemoryLists();
+            }
+            else if ((purgeStandby || flushModified) && promptElevationIfRequired)
+            {
+                bool workerSuccess = LaunchElevatedWorker(purgeStandby && !flushModified ? "--clean-memory-standby" : "--clean-memory");
+                if (workerSuccess)
+                {
+                    standbyPurged = purgeStandby;
+                    modifiedListFlushed = flushModified;
+                    workingSetsKernelSwept = true;
+                    fileCacheFlushed = true;
+                }
             }
 
             var after = GetMemoryStats();
@@ -273,13 +549,21 @@ namespace Beam.Services
                 UsedPhysGbBefore = before.UsedPhysGb,
                 UsedPhysGbAfter = after.UsedPhysGb,
                 StandbyPurged = standbyPurged,
-                ProcessesCleaned = procsCleaned
+                WorkingSetsSwept = workingSetsKernelSwept || procsCleaned > 0,
+                FileCacheFlushed = fileCacheFlushed,
+                ModifiedListFlushed = modifiedListFlushed,
+                ProcessesCleaned = procsCleaned,
+                IsElevated = elevated
             };
         }
 
-        public static Task<MemoryCleanResult> ReduceMemoryAsync(bool purgeStandby = true, bool flushModified = true, bool sweepProcesses = true)
+        public static Task<MemoryCleanResult> ReduceMemoryAsync(
+            bool purgeStandby = true,
+            bool flushModified = true,
+            bool sweepProcesses = true,
+            bool promptElevationIfRequired = false)
         {
-            return Task.Run(() => ReduceMemory(purgeStandby, flushModified, sweepProcesses));
+            return Task.Run(() => ReduceMemory(purgeStandby, flushModified, sweepProcesses, promptElevationIfRequired));
         }
     }
 }

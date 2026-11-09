@@ -49,6 +49,21 @@ namespace Beam
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Headless one-shot memory clean worker (called via 'runas' for elevated NT kernel cache purge)
+            if (e.Args.Any(a => a.Equals("--clean-memory", StringComparison.OrdinalIgnoreCase)))
+            {
+                MemoryReductService.ExecuteHeadlessWorker(purgeStandbyOnly: false);
+                Shutdown(0);
+                return;
+            }
+
+            if (e.Args.Any(a => a.Equals("--clean-memory-standby", StringComparison.OrdinalIgnoreCase)))
+            {
+                MemoryReductService.ExecuteHeadlessWorker(purgeStandbyOnly: true);
+                Shutdown(0);
+                return;
+            }
+
             Log("Kestrel v2.3 process starting...");
 
             bool forceReplace = e.Args.Any(a => a.Equals("--replace", StringComparison.OrdinalIgnoreCase));
@@ -199,6 +214,29 @@ namespace Beam
             {
                 Log($"Failed to ensure Installed Apps registration: {ex.Message}");
             }
+        }
+
+        public static void RestartAsAdministrator()
+        {
+            try
+            {
+                var exe = Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
+                {
+                    exe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Kestrel.exe");
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = "--replace",
+                    Verb = "runas",
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+                Current.Shutdown(0);
+            }
+            catch { }
         }
 
         protected override void OnExit(ExitEventArgs e)

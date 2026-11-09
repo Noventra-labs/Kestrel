@@ -179,12 +179,13 @@ namespace Beam.Services
             {
                 var iconMem = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathMemory);
                 var mem = MemoryReductService.GetMemoryStats();
+                bool isElevated = MemoryReductService.IsElevated;
 
                 commands.Add(new LauncherItem
                 {
                     Id = "cmd:memreduct_clean",
                     Name = "Clean & Reduce Memory (Mem Reduct)",
-                    Subtitle = $"RAM: {mem.LoadPercent}% used ({mem.UsedPhysGb:F1} GB / {mem.TotalPhysGb:F1} GB) • Purge Standby lists & sweep working sets",
+                    Subtitle = $"RAM: {mem.LoadPercent}% used ({mem.UsedPhysGb:F1} GB / {mem.TotalPhysGb:F1} GB) • {(isElevated ? "[Admin] Full kernel caches & working sets" : "Working sets sweep & RAM reduction")}",
                     Category = "System Tool",
                     Section = "Commands",
                     ShortcutBadge = "Clean RAM",
@@ -193,10 +194,21 @@ namespace Beam.Services
                     {
                         Task.Run(() =>
                         {
-                            var res = MemoryReductService.ReduceMemory();
+                            var res = MemoryReductService.ReduceMemory(
+                                purgeStandby: MemoryReductService.IsElevated,
+                                flushModified: MemoryReductService.IsElevated,
+                                sweepProcesses: true);
+
                             App.Current.Dispatcher.Invoke(() =>
                             {
-                                ToastNotification.Show($"✓ Mem Reduct: Freed {res.FreedMb:N0} MB RAM • Usage dropped {res.LoadBefore}% → {res.LoadAfter}%");
+                                if (res.IsElevated)
+                                {
+                                    ToastNotification.Show($"✓ Kernel Cache & Standby Purged • Freed {res.FreedMb:N0} MB RAM • Usage {res.LoadBefore}% → {res.LoadAfter}%");
+                                }
+                                else
+                                {
+                                    ToastNotification.Show($"✓ Working Sets Swept • Freed {res.FreedMb:N0} MB RAM ({res.ProcessesCleaned} processes) • Usage {res.LoadBefore}% → {res.LoadAfter}%");
+                                }
                             });
                         });
                     }
@@ -206,7 +218,9 @@ namespace Beam.Services
                 {
                     Id = "cmd:memreduct_standby",
                     Name = "Purge Standby Memory List",
-                    Subtitle = "Mem Reduct — Flush Windows cached standby memory into free physical RAM",
+                    Subtitle = isElevated
+                        ? "Mem Reduct — Flush Windows cached standby memory into free physical RAM"
+                        : "Mem Reduct — Flush Windows standby cache (Elevated worker via UAC)",
                     Category = "System Tool",
                     Section = "Commands",
                     Icon = iconMem,
@@ -214,11 +228,34 @@ namespace Beam.Services
                     {
                         Task.Run(() =>
                         {
-                            var res = MemoryReductService.ReduceMemory(purgeStandby: true, flushModified: false, sweepProcesses: false);
-                            App.Current.Dispatcher.Invoke(() =>
+                            if (MemoryReductService.IsElevated)
                             {
-                                ToastNotification.Show($"✓ Standby Purged: Freed {res.FreedMb:N0} MB RAM • Usage {res.LoadBefore}% → {res.LoadAfter}%");
-                            });
+                                var res = MemoryReductService.ReduceMemory(purgeStandby: true, flushModified: false, sweepProcesses: false);
+                                App.Current.Dispatcher.Invoke(() =>
+                                {
+                                    ToastNotification.Show($"✓ Standby Purged: Freed {res.FreedMb:N0} MB RAM • Usage {res.LoadBefore}% → {res.LoadAfter}%");
+                                });
+                            }
+                            else
+                            {
+                                var before = MemoryReductService.GetMemoryStats();
+                                bool ok = MemoryReductService.LaunchElevatedWorker("--clean-memory-standby");
+                                var after = MemoryReductService.GetMemoryStats();
+                                long freed = after.AvailPhysBytes - before.AvailPhysBytes;
+                                double freedMb = Math.Max(0, freed / (1024.0 * 1024.0));
+
+                                App.Current.Dispatcher.Invoke(() =>
+                                {
+                                    if (ok)
+                                    {
+                                        ToastNotification.Show($"✓ Standby Purged (Elevated Worker) • Freed {freedMb:N0} MB RAM • Usage {before.LoadPercent}% → {after.LoadPercent}%");
+                                    }
+                                    else
+                                    {
+                                        ToastNotification.Show("ℹ Notice: Purging standby cache requires Administrator permission");
+                                    }
+                                });
+                            }
                         });
                     }
                 });
@@ -227,7 +264,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:memreduct_workingset",
                     Name = "Trim Working Sets (All Processes)",
-                    Subtitle = "Mem Reduct — Empty working set memory across all running apps",
+                    Subtitle = "Mem Reduct — Empty working set memory across all running apps (Least-privilege, zero prompt)",
                     Category = "System Tool",
                     Section = "Commands",
                     Icon = iconMem,
@@ -238,11 +275,29 @@ namespace Beam.Services
                             var res = MemoryReductService.ReduceMemory(purgeStandby: false, flushModified: false, sweepProcesses: true);
                             App.Current.Dispatcher.Invoke(() =>
                             {
-                                ToastNotification.Show($"✓ Working Sets Swept: Cleaned {res.ProcessesCleaned} processes • Freed {res.FreedMb:N0} MB");
+                                ToastNotification.Show($"✓ Working Sets Swept • Cleaned {res.ProcessesCleaned} processes • Freed {res.FreedMb:N0} MB");
                             });
                         });
                     }
                 });
+
+                if (!isElevated)
+                {
+                    commands.Add(new LauncherItem
+                    {
+                        Id = "cmd:kestrel_restart_admin",
+                        Name = "Restart Kestrel as Administrator",
+                        Subtitle = "Relaunch Kestrel with elevated Administrator privileges for full kernel memory control",
+                        Category = "System Tool",
+                        Section = "Commands",
+                        ShortcutBadge = "Admin 🛡",
+                        Icon = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathShield),
+                        Action = () =>
+                        {
+                            App.RestartAsAdministrator();
+                        }
+                    });
+                }
             }
 
             // Microsoft PowerToys Suite

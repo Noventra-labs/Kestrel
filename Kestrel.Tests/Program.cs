@@ -19,6 +19,11 @@ internal static class Program
 
     private static async Task Main()
     {
+        await RunTestsAsync();
+    }
+
+    private static async Task RunTestsAsync()
+    {
         string temp = Path.Combine(Path.GetTempPath(), "Kestrel-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         CloudIdentity.CredentialDirectory = Path.Combine(temp, "credentials");
@@ -83,6 +88,19 @@ internal static class Program
             using var process = System.Diagnostics.Process.Start(info)!;
             await process.WaitForExitAsync();
             Check(process.ExitCode == 0, "cleanup script parses with spaces, apostrophes, and ampersands");
+
+            // Mem Reduct Engine Tests
+            var memStats = MemoryReductService.GetMemoryStats();
+            Check(memStats.TotalPhysBytes > 0 && memStats.LoadPercent <= 100, "memory stats queries valid physical RAM metrics");
+
+            var cleanResult = MemoryReductService.ReduceMemory(purgeStandby: false, flushModified: false, sweepProcesses: true);
+            Check(cleanResult.ProcessesCleaned > 0, "least-privilege working set sweep cleans accessible user processes");
+            Check(cleanResult.FreedBytes >= 0, "freed bytes calculation is non-negative");
+            Check(!MemoryReductService.CanAutoClean, "cooldown blocks immediate consecutive auto-clean iterations");
+
+            int workerCode = MemoryReductService.ExecuteHeadlessWorker(purgeStandbyOnly: true);
+            Check(workerCode == 0, "headless standby clean worker executes cleanly");
+
             Console.WriteLine($"{_passed} checks passed.");
         }
         finally
