@@ -43,18 +43,6 @@ Raycast/
 └── README.md
 ```
 
-## Tech Stack
-
-| Component | Technology |
-|---|---|
-| Desktop Application | .NET 10, WPF |
-| Windows Integration | Win32 APIs |
-| AI Integration | Gemini, OpenAI, Anthropic, Groq |
-| Backend | Python, FastAPI |
-| Database | Supabase PostgreSQL |
-| Cloud Hosting | Google Cloud Run |
-| Interface | Windows 11 Acrylic / Mica |
-
 ## About
 
 Kestrel is developed and maintained by **Noventra-Labs**, with a focus on making everyday Windows workflows faster and more convenient.
