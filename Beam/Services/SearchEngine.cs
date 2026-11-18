@@ -19,7 +19,7 @@ namespace Beam.Services
     {
         private static readonly ConcurrentDictionary<string, UsageRecord> UsageMap = new(StringComparer.OrdinalIgnoreCase);
 
-        private static readonly string FrecencyFile = Path.Combine(
+        internal static string FrecencyFile { get; set; } = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Kestrel",
             "frecency.json");
@@ -36,7 +36,14 @@ namespace Beam.Services
 
         public static void RecordUsage(string itemId)
         {
-            if (string.IsNullOrWhiteSpace(itemId) || itemId.StartsWith("math:") || itemId.StartsWith("web:"))
+            if (string.IsNullOrWhiteSpace(itemId) ||
+                itemId.StartsWith("math:", StringComparison.OrdinalIgnoreCase) ||
+                itemId.StartsWith("web:", StringComparison.OrdinalIgnoreCase) ||
+                itemId.StartsWith("dev:", StringComparison.OrdinalIgnoreCase) ||
+                itemId.StartsWith("sec:", StringComparison.OrdinalIgnoreCase) ||
+                itemId.StartsWith("mem:", StringComparison.OrdinalIgnoreCase) ||
+                itemId.StartsWith("port:", StringComparison.OrdinalIgnoreCase) ||
+                itemId.StartsWith("timer:", StringComparison.OrdinalIgnoreCase))
                 return;
 
             UsageMap.AddOrUpdate(

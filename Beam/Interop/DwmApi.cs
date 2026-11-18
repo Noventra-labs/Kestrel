@@ -252,6 +252,20 @@ namespace Beam.Interop
         /// Checks whether the current foreground HWND belongs to Beam or its hosted child WebView2 HWND.
         /// Prevents false deactivation when clicking inside the embedded Gemini WebView2 control.
         /// </summary>
+        public static int GetWindowProcessId(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero) return 0;
+            try
+            {
+                GetWindowThreadProcessId(hwnd, out uint pid);
+                return (int)pid;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         public static bool IsForegroundOwnedByBeamOrChild(IntPtr beamHwnd)
         {
             if (beamHwnd == IntPtr.Zero) return false;
