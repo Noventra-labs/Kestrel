@@ -102,13 +102,12 @@ namespace Beam.Services
                         if (scannedNames.Add(fileName))
                         {
                             var icon = ShellIconHelper.GetIcon(file);
-                            var displayPath = Path.GetDirectoryName(file) ?? file;
 
                             cacheRecords.Add(new CachedAppRecord
                             {
                                 Name = fileName,
                                 Path = file,
-                                Subtitle = displayPath,
+                                Subtitle = string.Empty,
                                 Category = "Application"
                             });
 
@@ -116,7 +115,7 @@ namespace Beam.Services
                             {
                                 Id = "app:" + fileName.ToLowerInvariant(),
                                 Name = fileName,
-                                Subtitle = displayPath,
+                                Subtitle = string.Empty,
                                 Category = "Application",
                                 Icon = icon,
                                 Path = file,
@@ -173,7 +172,7 @@ namespace Beam.Services
                         {
                             Name = app.Name,
                             Path = aumid,
-                            Subtitle = "Windows App",
+                            Subtitle = string.Empty,
                             Category = "Application",
                             Keywords = keywords
                         });
@@ -182,7 +181,7 @@ namespace Beam.Services
                         {
                             Id = "app:" + app.Name.ToLowerInvariant(),
                             Name = app.Name,
-                            Subtitle = "Windows App",
+                            Subtitle = string.Empty,
                             Category = "Application",
                             Keywords = keywords,
                             Icon = icon,
@@ -270,7 +269,7 @@ namespace Beam.Services
                 {
                     Id = "app:" + r.Name.ToLowerInvariant(),
                     Name = r.Name,
-                    Subtitle = r.Subtitle,
+                    Subtitle = string.Empty,
                     Category = r.Category,
                     Keywords = kw ?? string.Empty,
                     Icon = icon,
@@ -300,29 +299,29 @@ namespace Beam.Services
             var defaultSysIcon = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathGear);
             var defaultTermIcon = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathTerminal);
 
-            var systemTools = new (string Name, string Path, string Category, string Subtitle)[]
+            var systemTools = new (string Name, string Path, string Category)[]
             {
-                ("PowerShell (Run as Administrator)", @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "Application", "Windows PowerShell (Admin Console)"),
-                ("PowerShell", @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "Application", "powershell.exe"),
-                ("Command Prompt (Admin)", @"C:\Windows\System32\cmd.exe", "Application", "Elevated Administrator Command Prompt"),
-                ("Command Prompt", @"C:\Windows\System32\cmd.exe", "Application", @"C:\Windows\System32\cmd.exe"),
-                ("Component Services", @"C:\Windows\System32\dcomcnfg.exe", "Application", "dcomcnfg.exe"),
-                ("Computer Management", @"C:\Windows\System32\compmgmt.msc", "Application", "compmgmt.msc"),
-                ("Color Management", @"C:\Windows\System32\colorcpl.exe", "Control Panel", "colorcpl.exe"),
-                ("Control the Computer Without the Mouse or Keyboard", @"C:\Windows\System32\utilman.exe", "Control Panel", "Ease of Access Center"),
-                ("Task Manager", @"C:\Windows\System32\taskmgr.exe", "Application", "taskmgr.exe"),
-                ("Windows Terminal", "wt.exe", "Application", "Windows Terminal (wt.exe)"),
-                ("Windows Settings", "ms-settings:", "System Preference", "System Settings (ms-settings:)"),
-                ("Microsoft Store", "ms-windows-store:", "Application", "Microsoft Store (ms-windows-store:)"),
-                ("File Explorer", @"C:\Windows\explorer.exe", "Application", "explorer.exe"),
-                ("Notepad", @"C:\Windows\System32\notepad.exe", "Application", "notepad.exe"),
-                ("Calculator", @"C:\Windows\System32\calc.exe", "Application", "calc.exe"),
-                ("Control Panel", @"C:\Windows\System32\control.exe", "Control Panel", "control.exe"),
-                ("Device Manager", @"C:\Windows\System32\devmgmt.msc", "Control Panel", "devmgmt.msc"),
-                ("Disk Management", @"C:\Windows\System32\diskmgmt.msc", "Control Panel", "diskmgmt.msc"),
-                ("Services", @"C:\Windows\System32\services.msc", "Control Panel", "services.msc"),
-                ("Registry Editor", @"C:\Windows\regedit.exe", "Application", "regedit.exe"),
-                ("Resource Monitor", @"C:\Windows\System32\resmon.exe", "Application", "resmon.exe")
+                ("PowerShell (Run as Administrator)", @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "Application"),
+                ("PowerShell", @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "Application"),
+                ("Command Prompt (Admin)", @"C:\Windows\System32\cmd.exe", "Application"),
+                ("Command Prompt", @"C:\Windows\System32\cmd.exe", "Application"),
+                ("Component Services", @"C:\Windows\System32\dcomcnfg.exe", "Application"),
+                ("Computer Management", @"C:\Windows\System32\compmgmt.msc", "Application"),
+                ("Color Management", @"C:\Windows\System32\colorcpl.exe", "Control Panel"),
+                ("Ease of Access Center", @"C:\Windows\System32\utilman.exe", "Control Panel"),
+                ("Task Manager", @"C:\Windows\System32\taskmgr.exe", "Application"),
+                ("Windows Terminal", "wt.exe", "Application"),
+                ("Windows Settings", "ms-settings:", "System Preference"),
+                ("Microsoft Store", "ms-windows-store:", "Application"),
+                ("File Explorer", @"C:\Windows\explorer.exe", "Application"),
+                ("Notepad", @"C:\Windows\System32\notepad.exe", "Application"),
+                ("Calculator", @"C:\Windows\System32\calc.exe", "Application"),
+                ("Control Panel", @"C:\Windows\System32\control.exe", "Control Panel"),
+                ("Device Manager", @"C:\Windows\System32\devmgmt.msc", "Control Panel"),
+                ("Disk Management", @"C:\Windows\System32\diskmgmt.msc", "Control Panel"),
+                ("Services", @"C:\Windows\System32\services.msc", "Control Panel"),
+                ("Registry Editor", @"C:\Windows\regedit.exe", "Application"),
+                ("Resource Monitor", @"C:\Windows\System32\resmon.exe", "Application")
             };
 
             foreach (var tool in systemTools)
@@ -357,7 +356,7 @@ namespace Beam.Services
                     {
                         Id = "sys:" + tool.Name.ToLowerInvariant(),
                         Name = tool.Name,
-                        Subtitle = tool.Subtitle,
+                        Subtitle = string.Empty,
                         Category = tool.Category,
                         Keywords = GetSystemToolKeywords(tool.Name, tool.Path),
                         Icon = icon,
@@ -397,6 +396,20 @@ namespace Beam.Services
                 return "powershell pwsh terminal console admin scripting";
             if (name.Contains("Terminal"))
                 return "terminal wt console bash cmd prompt powershell";
+            if (name.Contains("File Explorer"))
+                return "explorer files folders browser";
+            if (name.Contains("Registry"))
+                return "regedit registry editor";
+            if (name.Contains("Resource Monitor"))
+                return "resmon resource monitor cpu memory disk";
+            if (name.Contains("Device Manager"))
+                return "devmgmt device manager drivers hardware";
+            if (name.Contains("Disk Management"))
+                return "diskmgmt disk management partitions storage";
+            if (name.Contains("Services"))
+                return "services msc background daemon";
+            if (name.Contains("Control Panel"))
+                return "control panel system settings";
             return string.Empty;
         }
 

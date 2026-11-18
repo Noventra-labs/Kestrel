@@ -51,7 +51,7 @@ namespace Beam.Services
                     IsValid = true,
                     Title = newGuid,
                     Result = newGuid,
-                    Subtitle = "Fresh UUID v4 • Click or Enter to Copy to Clipboard",
+                    Subtitle = "UUID v4",
                     Category = "GUID Generator",
                     SvgPath = IconGenerator.PathKey,
                     Theme = SquircleTheme.AdminGold
@@ -72,7 +72,7 @@ namespace Beam.Services
                     IsValid = true,
                     Title = nowUnix.ToString(),
                     Result = nowUnix.ToString(),
-                    Subtitle = $"Current Epoch Timestamp • Local: {localStr} • {utcStr}",
+                    Subtitle = $"{localStr} • {utcStr}",
                     Category = "Timestamp",
                     SvgPath = IconGenerator.PathClock,
                     Theme = SquircleTheme.WebCyan
@@ -99,7 +99,7 @@ namespace Beam.Services
                             IsValid = true,
                             Title = localStr,
                             Result = localStr,
-                            Subtitle = $"Unix {val} → {utcStr} (Enter: Copy Local Time)",
+                            Subtitle = $"Unix {val} → {utcStr}",
                             Category = "Timestamp Converter",
                             SvgPath = IconGenerator.PathClock,
                             Theme = SquircleTheme.WebCyan
@@ -122,7 +122,7 @@ namespace Beam.Services
                     IsValid = true,
                     Title = hex,
                     Result = hex,
-                    Subtitle = $"SHA256(\"{input}\") • Click or Enter to Copy Hash",
+                    Subtitle = $"SHA256",
                     Category = "Hasher",
                     SvgPath = IconGenerator.PathHash,
                     Theme = SquircleTheme.SystemPurple
@@ -142,7 +142,7 @@ namespace Beam.Services
                     IsValid = true,
                     Title = hex,
                     Result = hex,
-                    Subtitle = $"MD5(\"{input}\") • Click or Enter to Copy Hash",
+                    Subtitle = $"MD5",
                     Category = "Hasher",
                     SvgPath = IconGenerator.PathHash,
                     Theme = SquircleTheme.SystemPurple
@@ -162,7 +162,7 @@ namespace Beam.Services
                     IsValid = true,
                     Title = hex,
                     Result = hex,
-                    Subtitle = $"SHA1(\"{input}\") • Click or Enter to Copy Hash",
+                    Subtitle = $"SHA1",
                     Category = "Hasher",
                     SvgPath = IconGenerator.PathHash,
                     Theme = SquircleTheme.SystemPurple
@@ -180,7 +180,7 @@ namespace Beam.Services
                     IsValid = true,
                     Title = b64,
                     Result = b64,
-                    Subtitle = $"Base64 Encoded • Click or Enter to Copy",
+                    Subtitle = "Encoded",
                     Category = "Base64 Encoder",
                     SvgPath = IconGenerator.PathTerminal,
                     Theme = SquircleTheme.ClipAmber
@@ -203,7 +203,7 @@ namespace Beam.Services
                         IsValid = true,
                         Title = decoded,
                         Result = decoded,
-                        Subtitle = "Base64 Decoded Text • Click or Enter to Copy",
+                        Subtitle = "Decoded",
                         Category = "Base64 Decoder",
                         SvgPath = IconGenerator.PathTerminal,
                         Theme = SquircleTheme.ClipAmber

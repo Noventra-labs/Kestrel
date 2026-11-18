@@ -134,7 +134,7 @@ namespace Beam.Services
                 {
                     Id = "clip:" + entry.CopiedAt.Ticks,
                     Name = prefix + oneLine,
-                    Subtitle = $"{entry.Text.Length} chars • Copied {age} (Enter: Paste to App)",
+                    Subtitle = $"{entry.Text.Length} chars • {age}",
                     Category = entry.IsPinned ? "Pinned Clip" : "Clipboard",
                     ShortcutBadge = "Paste ↵",
                     Icon = entry.IsPinned ? iconPin : iconClip,

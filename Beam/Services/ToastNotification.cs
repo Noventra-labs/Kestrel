@@ -97,8 +97,8 @@ namespace Beam.Services
 
             var pill = new Border
             {
-                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(242, 22, 25, 34)),
-                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(62, 72, 92)),
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(204, 10, 13, 20)),
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(56, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(18),
                 Padding = new Thickness(16, 8, 18, 8),
@@ -107,7 +107,7 @@ namespace Beam.Services
                 {
                     BlurRadius = 18,
                     ShadowDepth = 4,
-                    Opacity = 0.75,
+                    Opacity = 0.65,
                     Color = Colors.Black
                 },
                 Child = stack

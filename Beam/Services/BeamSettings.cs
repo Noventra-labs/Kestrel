@@ -11,7 +11,6 @@ namespace Beam.Services
     {
         // 1. General & Hotkey Triggers
         public bool TriggerOnStartKey { get; set; } = true;
-        public bool EnableAltSpaceHotkey { get; set; } = true;
         public bool LaunchOnStartup { get; set; } = true;
         public bool HideOnClickOutside { get; set; } = true;
         public bool EnableToastNotifications { get; set; } = true;
