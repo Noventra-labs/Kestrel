@@ -159,45 +159,7 @@ Kestrel/
 └── README.md                # User guide and project documentation
 ```
 
----
-
-## ❓ Frequently Asked Questions (FAQ)
-
-<details>
-<summary><strong>Windows SmartScreen shows "Windows protected your PC". How do I continue?</strong></summary>
-
-Because Kestrel is a newly released open-source project and executables are not yet signed with a multi-thousand dollar corporate EV code-signing certificate, Windows SmartScreen may show a warning. Click **More info** and then select **Run anyway**. You can inspect the complete source code and reproducible build workflows in this repository.
-</details>
-
-<details>
-<summary><strong>Why does Kestrel request Administrator privileges?</strong></summary>
-
-Administrator rights are required specifically for:
-1. Purging Windows Standby lists via native NT kernel system calls (`NtSetSystemInformation`).
-2. Intercepting the single `Win` key reliably without opening the Windows 11 Start Menu.
-3. Enabling "Run as Administrator" (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd>) for other applications.
-</details>
-
-<details>
-<summary><strong>How do I close or uninstall Kestrel?</strong></summary>
-
-- **To exit:** Right-click the Kestrel tray icon and select **Exit Kestrel**.
-- **To uninstall:** If installed via `Kestrel-Setup.exe`, navigate to **Windows Settings > Apps > Installed apps**, search for **Kestrel**, and click **Uninstall**.
-</details>
-
----
-
-## 🛡️ Privacy & Security
-
-Kestrel is built on the philosophy of **zero telemetry**:
-- No user tracking, telemetry pings, or background usage logging.
-- All search queries, clipboard records, and history remain strictly on your local machine.
-- Local data is encrypted via Windows DPAPI.
-- Air-gapped offline operation — network connections are made exclusively when you invoke cloud AI streaming with your own configured API keys.
-
----
-
-## 📄 License & Credits
+## About
 
 Developed and maintained with care by [**Noventra-Labs**](https://github.com/Noventra-Labs).
 
@@ -205,6 +167,4 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for terms of use
 
 ---
 
-<p align="center">
-  <strong>Kestrel — One command bar. All your tools.</strong>
-</p>
+**Kestrel — One command bar. All your tools.**
