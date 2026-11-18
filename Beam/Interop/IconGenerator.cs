@@ -129,6 +129,12 @@ namespace Beam.Interop
         // Lucide: network (DNS & Network Info)
         public const string PathNetwork = "M9,2 H15 V8 H9 Z M2,16 H8 V22 H2 Z M16,16 H22 V22 H16 Z M12,8 V13 M5,16 V13 H19 V16";
 
+        // Lucide: activity (Live Telemetry)
+        public const string PathActivity = "M22,12 H18 L15,21 L9,3 L6,12 H2";
+
+        // Lucide: braces / code (JSON & JWT)
+        public const string PathBraces = "M8,3 H6 A2,2 0 0,0 4,5 V9 A2,2 0 0,1 2,11 V13 A2,2 0 0,1 4,15 V19 A2,2 0 0,0 6,21 H8 M16,3 H18 A2,2 0 0,1 20,5 V9 A2,2 0 0,0 22,11 V13 A2,2 0 0,0 20,15 V19 A2,2 0 0,1 18,21 H16";
+
         public static ImageSource GetSquircleIcon(SquircleTheme theme, string svgPath, bool asStroke = false)
         {
             string key = $"{theme}:{svgPath}:{asStroke}";
@@ -171,7 +177,7 @@ namespace Beam.Interop
                 iconBrush.Freeze();
 
                 System.Windows.Media.Pen? iconPen;
-                if (asStroke || svgPath.StartsWith("M4,5") || svgPath.StartsWith("M12,2 L20") || svgPath.StartsWith("M15,3") || svgPath.StartsWith("M4,14") || svgPath.StartsWith("M12,2 V12") || svgPath.StartsWith("M2,22") || svgPath.StartsWith("M3,7") || svgPath.StartsWith("M18,8") || svgPath.StartsWith("M4,9"))
+                if (asStroke || svgPath.StartsWith("M4,5") || svgPath.StartsWith("M12,2 L20") || svgPath.StartsWith("M15,3") || svgPath.StartsWith("M4,14") || svgPath.StartsWith("M12,2 V12") || svgPath.StartsWith("M2,22") || svgPath.StartsWith("M3,7") || svgPath.StartsWith("M18,8") || svgPath.StartsWith("M4,9") || svgPath.StartsWith("M22,12") || svgPath.StartsWith("M8,3"))
                 {
                     iconPen = new System.Windows.Media.Pen(iconBrush, 2.0)
                     {

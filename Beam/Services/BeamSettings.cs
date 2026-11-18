@@ -11,7 +11,6 @@ namespace Beam.Services
     {
         // 1. General & Hotkey Triggers
         public bool TriggerOnStartKey { get; set; } = true;
-        public bool EnableAltSpaceHotkey { get; set; } = true;
         public bool LaunchOnStartup { get; set; } = true;
         public bool HideOnClickOutside { get; set; } = true;
         public bool EnableToastNotifications { get; set; } = true;
@@ -29,6 +28,9 @@ namespace Beam.Services
         public bool EnableMemReduct { get; set; } = true;
         public bool AutoMemReductEnabled { get; set; } = false;
         public int AutoMemReductThreshold { get; set; } = 85;
+        public int AutoMemReductMinAvailMb { get; set; } = 1536;
+        public int SmartReclaimMinWorkingSetMb { get; set; } = 25;
+        public List<string> MemReductExcludedProcesses { get; set; } = new();
         public bool EnablePowerTools { get; set; } = true;
 
         // 3. Gemini & Multi-Provider Local + Cloud AI Configuration
@@ -173,6 +175,8 @@ namespace Beam.Services
                                 settings.SetApiKeyForProvider(inferred, settings.UserApiKeyOverride);
                             }
                         }
+                        settings.MemReductExcludedProcesses ??= new List<string>();
+                        settings.SavedKeyProfiles ??= new Dictionary<string, string>();
                         Current = settings;
                         return settings;
                     }

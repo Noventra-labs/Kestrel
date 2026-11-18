@@ -12,7 +12,8 @@ internal static class Program
     private static readonly string[] Queries =
     {
         "c", "ch", "chr", "chrome", "vsc", "visual", "visual studio code", "term",
-        "set", "settings", "pwsh", "note", "xyzq", "lh", "color", "mem reduct"
+        "set", "settings", "pwsh", "note", "xyzq", "lh", "color", "memreduct",
+        "memory claim", "#ff6363", "nanoid", "ulid", "timer 5m", "url hello world"
     };
 
     [STAThread]
@@ -34,6 +35,8 @@ internal static class Program
             Run("CalculatorService.Evaluate", q => CalculatorService.Evaluate(q));
             Run("CalculatorService.Evaluate (math)", _ => CalculatorService.Evaluate("12*(3+4)/7"));
             Run("DevTools.EvaluateInline", q => PowerDeveloperToolsService.EvaluateInline(q));
+            Run("MemoryReduct.GetMemoryStats", _ => MemoryReductService.GetMemoryStats());
+            Run("DevTools.GetActivePortBindings", _ => PowerDeveloperToolsService.GetActivePortBindings(80));
             return 0;
         }
         catch (Exception ex)

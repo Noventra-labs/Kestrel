@@ -39,7 +39,12 @@ namespace Beam.Services
             Action openFileSearchView,
             Action openSettingsView,
             Action triggerConfetti,
-            Action<bool, string> openGeminiChat)
+            Action<bool, string> openGeminiChat,
+            Action? openMemoryStudioView = null,
+            Action<MemoryCleanProfile, bool>? executeMemoryProfile = null,
+            Action? openPortInspectorView = null,
+            Action? openTempCleanupPreview = null,
+            Action? openHungAppsPreview = null)
         {
             var cfg = BeamSettings.Current;
 
@@ -66,7 +71,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:gemini_chat",
                     Name = "Gemini Chat",
-                    Subtitle = "Open Google Gemini AI inside Kestrel",
+                    Subtitle = string.Empty,
                     Category = "AI Command",
                     Section = "Commands",
                     ShortcutBadge = "Tab",
@@ -79,7 +84,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:ai_fix_grammar",
                     Name = "Fix Spelling & Grammar (Clipboard)",
-                    Subtitle = "Gemini AI — Proofread and fix grammar of copied clipboard text",
+                    Subtitle = string.Empty,
                     Category = "AI Command",
                     Section = "Commands",
                     Icon = iconAi,
@@ -95,7 +100,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:ai_summarize",
                     Name = "Summarize Clipboard Text",
-                    Subtitle = "Gemini AI — Create a concise bulleted summary of copied text",
+                    Subtitle = string.Empty,
                     Category = "AI Command",
                     Section = "Commands",
                     Icon = iconAi,
@@ -111,7 +116,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:ai_explain_code",
                     Name = "Explain Code in Clipboard",
-                    Subtitle = "Gemini AI — Explain how the code in your clipboard works",
+                    Subtitle = string.Empty,
                     Category = "AI Command",
                     Section = "Commands",
                     Icon = iconAi,
@@ -131,9 +136,10 @@ namespace Beam.Services
                 {
                     Id = "cmd:filesearch",
                     Name = "Search Files",
-                    Subtitle = "Instant fuzzy search across Desktop, Downloads, Documents, and Projects",
+                    Subtitle = string.Empty,
                     Category = "Command",
                     Section = "Commands",
+                    Keywords = "file search find documents folders explorer",
                     ShortcutBadge = "Ctrl+F",
                     Icon = iconSearch,
                     KeepOpenOnExecute = true,
@@ -148,9 +154,10 @@ namespace Beam.Services
                 {
                     Id = "cmd:clipboard",
                     Name = "Clipboard History",
-                    Subtitle = "Search, view, and paste from your recent clipboard items",
+                    Subtitle = string.Empty,
                     Category = "Command",
                     Section = "Commands",
+                    Keywords = "clipboard history paste copied snippets",
                     ShortcutBadge = "Ctrl+Shift+V",
                     Icon = iconClip,
                     KeepOpenOnExecute = true,
@@ -165,121 +172,71 @@ namespace Beam.Services
                 {
                     Id = "cmd:killproc",
                     Name = "Kill Process",
-                    Subtitle = "Inspect running processes by RAM usage and terminate frozen apps",
+                    Subtitle = string.Empty,
                     Category = "Command",
                     Section = "Commands",
+                    Keywords = "kill process task manager end terminate pid memory",
                     Icon = iconProc,
                     KeepOpenOnExecute = true,
                     Action = openProcessKillerView
                 });
             }
 
-            // Mem Reduct Engine (henrypp/memreduct)
+            // Mem Reduct Engine (Safe Smart Reclaim + Optional Kernel Cleanup)
             if (cfg.EnableMemReduct)
             {
                 var iconMem = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathMemory);
+                var iconTelemetry = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathActivity, asStroke: true);
                 var mem = MemoryReductService.GetMemoryStats();
                 bool isElevated = MemoryReductService.IsElevated;
 
-                commands.Add(new LauncherItem
+                foreach (var desc in MemoryReductService.GetCommandDefinitions(mem, isElevated))
                 {
-                    Id = "cmd:memreduct_clean",
-                    Name = "Clean & Reduce Memory (Mem Reduct)",
-                    Subtitle = $"RAM: {mem.LoadPercent}% used ({mem.UsedPhysGb:F1} GB / {mem.TotalPhysGb:F1} GB) • {(isElevated ? "[Admin] Full kernel caches & working sets" : "Working sets sweep & RAM reduction")}",
-                    Category = "System Tool",
-                    Section = "Commands",
-                    ShortcutBadge = "Clean RAM",
-                    Icon = iconMem,
-                    Action = () =>
-                    {
-                        Task.Run(() =>
-                        {
-                            var res = MemoryReductService.ReduceMemory(
-                                purgeStandby: MemoryReductService.IsElevated,
-                                flushModified: MemoryReductService.IsElevated,
-                                sweepProcesses: true);
+                    var captured = desc;
+                    bool isStudio = captured.Id == "cmd:memreduct_studio";
+                    bool promptElevation = captured.Profile == MemoryCleanProfile.LowPriorityStandbyOnly ||
+                                           captured.Profile == MemoryCleanProfile.FullKernelAndWorkingSets;
 
-                            App.Current.Dispatcher.Invoke(() =>
-                            {
-                                if (res.IsElevated)
-                                {
-                                    ToastNotification.Show($"✓ Kernel Cache & Standby Purged • Freed {res.FreedMb:N0} MB RAM • Usage {res.LoadBefore}% → {res.LoadAfter}%");
-                                }
-                                else
-                                {
-                                    ToastNotification.Show($"✓ Working Sets Swept • Freed {res.FreedMb:N0} MB RAM ({res.ProcessesCleaned} processes) • Usage {res.LoadBefore}% → {res.LoadAfter}%");
-                                }
-                            });
-                        });
-                    }
-                });
-
-                commands.Add(new LauncherItem
-                {
-                    Id = "cmd:memreduct_standby",
-                    Name = "Purge Standby Memory List",
-                    Subtitle = isElevated
-                        ? "Mem Reduct — Flush Windows cached standby memory into free physical RAM"
-                        : "Mem Reduct — Flush Windows standby cache (Elevated worker via UAC)",
-                    Category = "System Tool",
-                    Section = "Commands",
-                    Icon = iconMem,
-                    Action = () =>
+                    commands.Add(new LauncherItem
                     {
-                        Task.Run(() =>
+                        Id = captured.Id,
+                        Name = captured.Name,
+                        Subtitle = captured.Subtitle,
+                        Category = captured.Category,
+                        Section = "Commands",
+                        Keywords = captured.Keywords,
+                        ShortcutBadge = captured.ShortcutBadge,
+                        Icon = isStudio ? iconTelemetry : iconMem,
+                        KeepOpenOnExecute = true,
+                        Action = () =>
                         {
-                            if (MemoryReductService.IsElevated)
+                            if (isStudio)
                             {
-                                var res = MemoryReductService.ReduceMemory(purgeStandby: true, flushModified: false, sweepProcesses: false);
+                                openMemoryStudioView?.Invoke();
+                                return;
+                            }
+
+                            if (executeMemoryProfile != null)
+                            {
+                                executeMemoryProfile(captured.Profile, promptElevation);
+                                return;
+                            }
+
+                            Task.Run(async () =>
+                            {
+                                var res = await MemoryReductService.ReduceMemoryAsync(
+                                    promptElevationIfRequired: promptElevation,
+                                    profile: captured.Profile);
                                 App.Current.Dispatcher.Invoke(() =>
                                 {
-                                    ToastNotification.Show($"✓ Standby Purged: Freed {res.FreedMb:N0} MB RAM • Usage {res.LoadBefore}% → {res.LoadAfter}%");
+                                    ToastNotification.Show(res.ElevationCancelled
+                                        ? "⚠ Administrator permission was declined (UAC cancelled)"
+                                        : $"✓ {res.FormatSummary()}");
                                 });
-                            }
-                            else
-                            {
-                                var before = MemoryReductService.GetMemoryStats();
-                                bool ok = MemoryReductService.LaunchElevatedWorker("--clean-memory-standby");
-                                var after = MemoryReductService.GetMemoryStats();
-                                long freed = after.AvailPhysBytes - before.AvailPhysBytes;
-                                double freedMb = Math.Max(0, freed / (1024.0 * 1024.0));
-
-                                App.Current.Dispatcher.Invoke(() =>
-                                {
-                                    if (ok)
-                                    {
-                                        ToastNotification.Show($"✓ Standby Purged (Elevated Worker) • Freed {freedMb:N0} MB RAM • Usage {before.LoadPercent}% → {after.LoadPercent}%");
-                                    }
-                                    else
-                                    {
-                                        ToastNotification.Show("ℹ Notice: Purging standby cache requires Administrator permission");
-                                    }
-                                });
-                            }
-                        });
-                    }
-                });
-
-                commands.Add(new LauncherItem
-                {
-                    Id = "cmd:memreduct_workingset",
-                    Name = "Trim Working Sets (All Processes)",
-                    Subtitle = "Mem Reduct — Empty working set memory across all running apps (Least-privilege, zero prompt)",
-                    Category = "System Tool",
-                    Section = "Commands",
-                    Icon = iconMem,
-                    Action = () =>
-                    {
-                        Task.Run(() =>
-                        {
-                            var res = MemoryReductService.ReduceMemory(purgeStandby: false, flushModified: false, sweepProcesses: true);
-                            App.Current.Dispatcher.Invoke(() =>
-                            {
-                                ToastNotification.Show($"✓ Working Sets Swept • Cleaned {res.ProcessesCleaned} processes • Freed {res.FreedMb:N0} MB");
                             });
-                        });
-                    }
-                });
+                        }
+                    });
+                }
 
                 if (!isElevated)
                 {
@@ -287,9 +244,10 @@ namespace Beam.Services
                     {
                         Id = "cmd:kestrel_restart_admin",
                         Name = "Restart Kestrel as Administrator",
-                        Subtitle = "Relaunch Kestrel with elevated Administrator privileges for full kernel memory control",
+                        Subtitle = string.Empty,
                         Category = "System Tool",
                         Section = "Commands",
+                        Keywords = "admin administrator elevate restart kestrel memreduct kernel",
                         ShortcutBadge = "Admin 🛡",
                         Icon = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathShield),
                         Action = () =>
@@ -308,12 +266,129 @@ namespace Beam.Services
                 var iconCoffee = IconGenerator.GetSquircleIcon(SquircleTheme.ClipAmber, IconGenerator.PathCoffee);
                 var iconPin = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathPin);
                 var iconDev = IconGenerator.GetSquircleIcon(SquircleTheme.SystemPurple, IconGenerator.PathHash);
+                var iconPort = IconGenerator.GetSquircleIcon(SquircleTheme.WebCyan, IconGenerator.PathNetwork, asStroke: true);
+                var iconBraces = IconGenerator.GetSquircleIcon(SquircleTheme.CalcGreen, IconGenerator.PathBraces, asStroke: true);
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:port_inspector",
+                    Name = "Active Ports & Local Servers (Port Inspector)",
+                    Subtitle = "Inspect listening TCP/UDP ports and PIDs via iphlpapi (Safe inspection, two-step kill confirm)",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "port ports localhost tcp udp listening netstat server 3000 8080 5173 8000",
+                    ShortcutBadge = "Ctrl+P",
+                    Icon = iconPort,
+                    KeepOpenOnExecute = true,
+                    Action = () => openPortInspectorView?.Invoke()
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:json_format",
+                    Name = "Format & Pretty-Print Clipboard JSON",
+                    Subtitle = "Validate and format JSON currently stored in clipboard",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "json format pretty print beautify validate clipboard",
+                    Icon = iconBraces,
+                    Action = () => PowerDeveloperToolsService.FormatClipboardJson(minify: false)
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:json_minify",
+                    Name = "Minify Clipboard JSON",
+                    Subtitle = "Validate and compact JSON in clipboard into a single line",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "json minify compact compress clipboard",
+                    Icon = iconBraces,
+                    Action = () => PowerDeveloperToolsService.FormatClipboardJson(minify: true)
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:clean_url",
+                    Name = "Clean Tracking Parameters from Clipboard URL",
+                    Subtitle = "Strip utm_*, fbclid, gclid, si, and tracking parameters from copied link",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "url link clean strip tracking utm fbclid gclid privacy clipboard",
+                    Icon = iconGlobe,
+                    Action = PowerDeveloperToolsService.CleanClipboardUrlTrackingParams
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:clip_sort",
+                    Name = "Sort Clipboard Lines Alphabetically",
+                    Subtitle = "Sort lines of copied text alphabetically and update clipboard",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "sort lines clipboard text alphabetize",
+                    Icon = iconClip,
+                    Action = () => PowerDeveloperToolsService.TransformClipboardText("sort", "Sorted Lines")
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:clip_dedup",
+                    Name = "Deduplicate Clipboard Lines",
+                    Subtitle = "Remove duplicate lines from copied text while preserving order",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "dedup unique duplicate lines remove clipboard text",
+                    Icon = iconClip,
+                    Action = () => PowerDeveloperToolsService.TransformClipboardText("dedup", "Deduplicated Lines")
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:clip_upper",
+                    Name = "Convert Clipboard Text to UPPERCASE",
+                    Subtitle = "Transform copied clipboard text to uppercase",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "uppercase case text clipboard transform",
+                    Icon = iconDev,
+                    Action = () => PowerDeveloperToolsService.TransformClipboardText("upper", "UPPERCASE")
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:clip_lower",
+                    Name = "Convert Clipboard Text to lowercase",
+                    Subtitle = "Transform copied clipboard text to lowercase",
+                    Category = "Developer",
+                    Section = "Commands",
+                    Keywords = "lowercase case text clipboard transform",
+                    Icon = iconDev,
+                    Action = () => PowerDeveloperToolsService.TransformClipboardText("lower", "lowercase")
+                });
+
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:network_summary",
+                    Name = "Copy Active Network Interfaces Summary",
+                    Subtitle = PowerDeveloperToolsService.GetNetworkSummary(),
+                    Category = "Network",
+                    Section = "Commands",
+                    Keywords = "network ip ipv4 wifi ethernet adapter summary lan",
+                    Icon = iconPort,
+                    Action = () =>
+                    {
+                        var summary = PowerDeveloperToolsService.GetNetworkSummary();
+                        System.Windows.Clipboard.SetText(summary);
+                        ToastNotification.Show("✓ Copied Network Summary to Clipboard");
+                    }
+                });
 
                 commands.Add(new LauncherItem
                 {
                     Id = "cmd:powertoys_colorpicker",
                     Name = "Color Picker (Screen Eyedropper)",
-                    Subtitle = "PowerToys Color Picker — 8x pixel loupe magnifier to pick and copy HEX/RGB color",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
                     ShortcutBadge = "Win+Shift+C",
@@ -329,7 +404,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_text_extractor",
                     Name = "Text Extractor (Screen OCR)",
-                    Subtitle = "PowerToys Text Extractor — Snip any area of screen to copy OCR text to clipboard",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
                     ShortcutBadge = "Win+Shift+T",
@@ -345,10 +420,10 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_awake_indefinite",
                     Name = "Awake: Keep Screen Awake (Indefinitely)",
-                    Subtitle = "PowerToys Awake — Keep computer & screen awake indefinitely (prevent sleep & lock)",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
-                    ShortcutBadge = "Awake ☕",
+                    ShortcutBadge = "Awake",
                     Icon = iconCoffee,
                     Action = () =>
                     {
@@ -361,7 +436,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_awake_1h",
                     Name = "Awake: Keep Screen Awake (1 Hour)",
-                    Subtitle = "PowerToys Awake — Keep computer & screen awake for 1 hour",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
                     Icon = iconCoffee,
@@ -376,7 +451,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_awake_30m",
                     Name = "Awake: Keep Screen Awake (30 Minutes)",
-                    Subtitle = "PowerToys Awake — Keep computer & screen awake for 30 minutes",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
                     Icon = iconCoffee,
@@ -391,7 +466,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_awake_off",
                     Name = "Awake: Off (Allow Screen Sleep)",
-                    Subtitle = "PowerToys Awake — Restore normal Windows power and screen sleep timers",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
                     Icon = iconCoffee,
@@ -406,10 +481,10 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_always_on_top",
                     Name = "Always on Top (Pin Window)",
-                    Subtitle = "PowerToys Always on Top — Pin or unpin active window to stay topmost",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
-                    ShortcutBadge = "Pin 📌",
+                    ShortcutBadge = "Pin",
                     Icon = iconPin,
                     Action = () => WindowManagerService.ToggleAlwaysOnTop()
                 });
@@ -418,7 +493,7 @@ namespace Beam.Services
                 {
                     Id = "cmd:powertoys_hosts_file",
                     Name = "Edit Windows Hosts File",
-                    Subtitle = "PowerToys Hosts File Editor — Open hosts file in elevated Notepad",
+                    Subtitle = string.Empty,
                     Category = "PowerToys",
                     Section = "Commands",
                     Icon = iconDev,
@@ -430,8 +505,8 @@ namespace Beam.Services
             commands.Add(new LauncherItem
             {
                 Id = "cmd:settings",
-                Name = "Kestrel Preferences & Settings",
-                Subtitle = "Enable/disable File Search, AI, Window Snap, Hotkeys & Cloud AI",
+                Name = "Kestrel Preferences",
+                Subtitle = string.Empty,
                 Category = "Preferences",
                 Section = "Commands",
                 ShortcutBadge = "Ctrl+,",
@@ -444,7 +519,7 @@ namespace Beam.Services
             {
                 Id = "cmd:confetti",
                 Name = "Confetti",
-                Subtitle = "Shoot celebratory Raycast confetti across your screen",
+                Subtitle = string.Empty,
                 Category = "Command",
                 Section = "Commands",
                 Icon = iconStar,
@@ -464,7 +539,7 @@ namespace Beam.Services
                     {
                         Id = "cmd:powershell_admin",
                         Name = "PowerShell (Admin)",
-                        Subtitle = "Open Windows PowerShell with elevated Administrator privileges",
+                        Subtitle = string.Empty,
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconShield,
@@ -474,7 +549,7 @@ namespace Beam.Services
                     {
                         Id = "cmd:cmd_admin",
                         Name = "Command Prompt (Admin)",
-                        Subtitle = "Open Command Prompt (cmd.exe) with elevated Administrator privileges",
+                        Subtitle = string.Empty,
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconShield,
@@ -484,7 +559,7 @@ namespace Beam.Services
                     {
                         Id = "cmd:wt_admin",
                         Name = "Windows Terminal (Admin)",
-                        Subtitle = "Open Windows Terminal (wt.exe) with elevated Administrator privileges",
+                        Subtitle = string.Empty,
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconShield,
@@ -494,7 +569,7 @@ namespace Beam.Services
                     {
                         Id = "cmd:uuid",
                         Name = "Generate UUID / GUID",
-                        Subtitle = "Generate a new v4 UUID and copy directly to clipboard",
+                        Subtitle = string.Empty,
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconKey,
@@ -509,7 +584,7 @@ namespace Beam.Services
                     {
                         Id = "cmd:password",
                         Name = "Generate Strong Password",
-                        Subtitle = "Generate a 20-character cryptographic password to clipboard",
+                        Subtitle = string.Empty,
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconKey,
@@ -527,7 +602,7 @@ namespace Beam.Services
                     {
                         Id = "cmd:local_ip",
                         Name = "Copy Local IPv4 Address",
-                        Subtitle = $"Copy your LAN IP address ({GetLocalIpAddress()}) to clipboard",
+                        Subtitle = GetLocalIpAddress(),
                         Category = "Network",
                         Section = "Commands",
                         Icon = iconGlobe,
@@ -542,21 +617,42 @@ namespace Beam.Services
                     {
                         Id = "cmd:flush_dns",
                         Name = "Flush DNS Cache",
-                        Subtitle = "Clear Windows DNS resolver cache (ipconfig /flushdns)",
+                        Subtitle = "Clear Windows DNS resolver cache (DnsFlushResolverCache / ipconfig)",
                         Category = "Network",
                         Section = "System",
+                        Keywords = "dns flush cache resolver ipconfig network",
                         Icon = iconGlobe,
-                        Action = () =>
-                        {
-                            RunHiddenCmd("ipconfig /flushdns");
-                            ToastNotification.Show("✓ Windows DNS Cache Flushed");
-                        }
+                        Action = PowerDeveloperToolsService.FlushDns
+                    },
+                    new()
+                    {
+                        Id = "cmd:clean_temp_preview",
+                        Name = "Clean Temporary & Cache Files (Preview & Confirm)",
+                        Subtitle = "Scan %TEMP% & CrashDumps (>24h stale, unlocked) — previews before deleting",
+                        Category = "System",
+                        Section = "System",
+                        Keywords = "temp temporary files cache clean disk space free crashdumps",
+                        Icon = iconTrash,
+                        KeepOpenOnExecute = true,
+                        Action = () => openTempCleanupPreview?.Invoke()
+                    },
+                    new()
+                    {
+                        Id = "cmd:hung_apps_preview",
+                        Name = "Check Unresponsive Apps (Preview & Confirm)",
+                        Subtitle = "Scan for frozen / Not Responding windows — previews before terminating",
+                        Category = "System",
+                        Section = "System",
+                        Keywords = "hung frozen not responding unresponsive crash kill apps",
+                        Icon = iconProc,
+                        KeepOpenOnExecute = true,
+                        Action = () => openHungAppsPreview?.Invoke()
                     },
                     new()
                     {
                         Id = "sys:darkmode",
                         Name = "Toggle Windows Dark / Light Mode",
-                        Subtitle = "Switch Windows 11 system and app theme between Dark and Light",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconMoon,
@@ -570,7 +666,7 @@ namespace Beam.Services
                     {
                         Id = "sys:screenshot",
                         Name = "Take Screenshot (Snipping Tool)",
-                        Subtitle = "Open Windows region screen snip overlay",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         ShortcutBadge = "Win+Shift+S",
@@ -581,7 +677,7 @@ namespace Beam.Services
                     {
                         Id = "sys:vol_mute",
                         Name = "Mute / Unmute System Audio",
-                        Subtitle = "Toggle master speaker volume mute state",
+                        Subtitle = string.Empty,
                         Category = "Audio",
                         Section = "System",
                         Icon = iconVol,
@@ -591,7 +687,7 @@ namespace Beam.Services
                     {
                         Id = "sys:vol_up",
                         Name = "Volume Up (+10%)",
-                        Subtitle = "Increase master system audio volume",
+                        Subtitle = string.Empty,
                         Category = "Audio",
                         Section = "System",
                         Icon = iconVol,
@@ -601,7 +697,7 @@ namespace Beam.Services
                     {
                         Id = "sys:vol_down",
                         Name = "Volume Down (-10%)",
-                        Subtitle = "Decrease master system audio volume",
+                        Subtitle = string.Empty,
                         Category = "Audio",
                         Section = "System",
                         Icon = iconVol,
@@ -611,7 +707,7 @@ namespace Beam.Services
                     {
                         Id = "sys:empty_trash",
                         Name = "Empty Recycle Bin",
-                        Subtitle = "Permanently delete all files currently in the Recycle Bin",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconTrash,
@@ -625,7 +721,7 @@ namespace Beam.Services
                     {
                         Id = "sys:lock",
                         Name = "Lock Screen",
-                        Subtitle = "Lock Windows workstation immediately",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         ShortcutBadge = "Win+L",
@@ -636,7 +732,7 @@ namespace Beam.Services
                     {
                         Id = "sys:sleep",
                         Name = "Sleep Computer",
-                        Subtitle = "Put PC into low-power sleep state",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconMoon,
@@ -646,7 +742,7 @@ namespace Beam.Services
                     {
                         Id = "sys:restart_explorer",
                         Name = "Restart Windows Explorer",
-                        Subtitle = "Restart explorer.exe to refresh taskbar and shell",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconProc,
@@ -656,7 +752,7 @@ namespace Beam.Services
                     {
                         Id = "sys:env_vars",
                         Name = "Edit Environment Variables",
-                        Subtitle = "Open Windows System Environment Variables dialog",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconGear,
@@ -666,7 +762,7 @@ namespace Beam.Services
                     {
                         Id = "sys:startup_apps",
                         Name = "Startup Apps Settings",
-                        Subtitle = "Manage applications that launch when Windows starts",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconGear,
@@ -676,7 +772,7 @@ namespace Beam.Services
                     {
                         Id = "sys:restart",
                         Name = "Restart Computer",
-                        Subtitle = "Reboot Windows (5-second delay)",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconPower,
@@ -686,7 +782,7 @@ namespace Beam.Services
                     {
                         Id = "sys:shutdown",
                         Name = "Shut Down Computer",
-                        Subtitle = "Power off Windows (5-second delay)",
+                        Subtitle = string.Empty,
                         Category = "System",
                         Section = "System",
                         Icon = iconPower,
@@ -702,6 +798,24 @@ namespace Beam.Services
             }
 
             return commands;
+        }
+
+        public static void RefreshMemoryCommandSubtitles(IList<LauncherItem> commands)
+        {
+            if (commands == null || commands.Count == 0) return;
+
+            var mem = MemoryReductService.GetMemoryStats();
+            bool isElevated = MemoryReductService.IsElevated;
+            var defs = MemoryReductService.GetCommandDefinitions(mem, isElevated)
+                .ToDictionary(d => d.Id, StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < commands.Count; i++)
+            {
+                if (defs.TryGetValue(commands[i].Id, out var desc))
+                {
+                    commands[i].Subtitle = desc.Subtitle;
+                }
+            }
         }
 
         private record struct ProcessEntry(int Id, string Name, string Title, long MemMb);
@@ -824,7 +938,7 @@ namespace Beam.Services
                 {
                     Id = "web:gemini",
                     Name = $"Ask Gemini AI \"{query}\"",
-                    Subtitle = "Open Embedded Gemini Chat inside Kestrel",
+                    Subtitle = string.Empty,
                     Category = "Gemini AI",
                     ShortcutBadge = "Tab",
                     Icon = iconAi,
@@ -841,7 +955,7 @@ namespace Beam.Services
                     {
                         Id = "web:google",
                         Name = $"Search Google for \"{query}\"",
-                        Subtitle = "Open in default web browser",
+                        Subtitle = string.Empty,
                         Category = "Web Search",
                         Icon = iconWeb,
                         Action = () => AppScanner.LaunchFile($"https://www.google.com/search?q={encoded}")
@@ -850,7 +964,7 @@ namespace Beam.Services
                     {
                         Id = "web:youtube",
                         Name = $"Search YouTube for \"{query}\"",
-                        Subtitle = "Open YouTube search results",
+                        Subtitle = string.Empty,
                         Category = "Web Search",
                         Icon = iconWeb,
                         Action = () => AppScanner.LaunchFile($"https://www.youtube.com/results?search_query={encoded}")
@@ -859,7 +973,7 @@ namespace Beam.Services
                     {
                         Id = "web:github",
                         Name = $"Search GitHub for \"{query}\"",
-                        Subtitle = "Search repositories and code on GitHub",
+                        Subtitle = string.Empty,
                         Category = "Web Search",
                         Icon = iconWeb,
                         Action = () => AppScanner.LaunchFile($"https://github.com/search?q={encoded}")

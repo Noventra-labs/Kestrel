@@ -49,18 +49,20 @@ namespace Beam
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Headless one-shot memory clean worker (called via 'runas' for elevated NT kernel cache purge)
-            if (e.Args.Any(a => a.Equals("--clean-memory", StringComparison.OrdinalIgnoreCase)))
+            // Headless one-shot memory clean worker (strict allowlisted operations + per-run correlation ID via 'runas')
+            bool hasWorkerFlags = e.Args.Any(a =>
+                a.StartsWith("--clean-memory", StringComparison.OrdinalIgnoreCase) ||
+                a.StartsWith(MemoryReductService.ArgRequestIdPrefix, StringComparison.OrdinalIgnoreCase));
+            if (hasWorkerFlags)
             {
-                MemoryReductService.ExecuteHeadlessWorker(purgeStandbyOnly: false);
-                Shutdown(0);
-                return;
-            }
+                if (!MemoryReductService.TryParseWorkerArguments(e.Args, out string op, out string requestId))
+                {
+                    Shutdown(2);
+                    return;
+                }
 
-            if (e.Args.Any(a => a.Equals("--clean-memory-standby", StringComparison.OrdinalIgnoreCase)))
-            {
-                MemoryReductService.ExecuteHeadlessWorker(purgeStandbyOnly: true);
-                Shutdown(0);
+                int workerExit = MemoryReductService.ExecuteHeadlessWorker(op, requestId);
+                Shutdown(workerExit);
                 return;
             }
 
@@ -116,7 +118,7 @@ namespace Beam
                 if (startInTray)
                 {
                     _mainWindow.HideAndTrim(false);
-                    ToastNotification.Show("Beam is active in System Tray • Press Windows Key or Alt+Space");
+                    ToastNotification.Show("Kestrel is active in System Tray • Press Windows Key anytime");
                 }
                 else
                 {

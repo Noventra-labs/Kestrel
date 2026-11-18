@@ -17,9 +17,9 @@
         <Border x:Name="LoupeContainer"
                 Width="140" Height="175"
                 CornerRadius="16"
-                Background="#EE1A1F2C"
-                BorderBrush="#44FFFFFF"
-                BorderThickness="1.5"
+                Background="#CC0A0D14"
+                BorderBrush="#42FFFFFF"
+                BorderThickness="1"
                 ClipToBounds="True">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.55" Color="#000000" />
