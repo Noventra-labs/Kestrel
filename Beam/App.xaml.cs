@@ -116,7 +116,7 @@ namespace Beam
                 if (startInTray)
                 {
                     _mainWindow.HideAndTrim(false);
-                    ToastNotification.Show("Beam is active in System Tray • Press Windows Key or Alt+Space");
+                    ToastNotification.Show("Kestrel is active in System Tray • Press Windows Key anytime");
                 }
                 else
                 {

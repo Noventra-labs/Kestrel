@@ -89,7 +89,7 @@ namespace Beam
 
             InitializeTrayIcon();
 
-            // Install Low-Level Global Keyboard Hook for BOTH Start Button (Win Key) & Alt + Space
+            // Install Low-Level Global Keyboard Hook for Windows Key solo tap activation
             try
             {
                 _keyboardHook = new GlobalKeyboardHook(() =>
@@ -97,10 +97,9 @@ namespace Beam
                     Dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(SummonOrToggle));
                 })
                 {
-                    EnableStartKeyTrigger = _settings.TriggerOnStartKey,
-                    EnableAltSpaceHotkey = _settings.EnableAltSpaceHotkey
+                    EnableStartKeyTrigger = _settings.TriggerOnStartKey
                 };
-                App.Log("Global keyboard hook (Start Button + Alt+Space) installed successfully.");
+                App.Log("Global keyboard hook (Windows Key) installed successfully.");
             }
             catch (Exception ex)
             {
@@ -174,7 +173,6 @@ namespace Beam
             if (_keyboardHook != null)
             {
                 _keyboardHook.EnableStartKeyTrigger = updated.TriggerOnStartKey;
-                _keyboardHook.EnableAltSpaceHotkey = updated.EnableAltSpaceHotkey;
             }
 
             QuickAiBadgeBorder.Visibility = updated.EnableAiFeatures ? Visibility.Visible : Visibility.Collapsed;
@@ -243,8 +241,8 @@ namespace Beam
             _builtInCommands.Insert(0, new LauncherItem
             {
                 Id = "cmd_manage_api_keys",
-                Name = "Insert / Switch Local AI API Keys (Gemini, OpenAI, Groq, Claude)",
-                Subtitle = "Preferences — Add, change, or swap local API keys anytime",
+                Name = "Manage AI API Keys",
+                Subtitle = string.Empty,
                 Category = "Command",
                 KeepOpenOnExecute = true,
                 Icon = IconGenerator.GetSquircleIcon(SquircleTheme.CalcGreen, IconGenerator.PathKey),
@@ -296,7 +294,7 @@ namespace Beam
 
                 var menu = new Forms.ContextMenuStrip();
 
-                var openItem = new Forms.ToolStripMenuItem("Open Kestrel (Start Key / Alt + Space)");
+                var openItem = new Forms.ToolStripMenuItem("Open Kestrel (Windows Key)");
                 openItem.Font = new System.Drawing.Font(openItem.Font, System.Drawing.FontStyle.Bold);
                 openItem.Click += (s, e) => Dispatcher.Invoke(Summon);
 
@@ -335,7 +333,7 @@ namespace Beam
                 {
                     Icon = icon,
                     ContextMenuStrip = menu,
-                    Text = "Kestrel Launcher — Active (Press Win Key or Alt+Space)",
+                    Text = "Kestrel Launcher — Active (Press Windows Key)",
                     Visible = true
                 };
 
@@ -419,13 +417,25 @@ namespace Beam
             }
             GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
+            ActionsOverlay.Visibility = Visibility.Collapsed;
+            SettingsOverlay.Visibility = Visibility.Collapsed;
+            LauncherView.Visibility = Visibility.Visible;
 
             Hide();
+
+            if (_currentMode != LauncherMode.MainSearch)
+            {
+                SwitchMode(LauncherMode.MainSearch, focusSearch: false);
+            }
+            else if (!string.IsNullOrEmpty(SearchBox.Text))
+            {
+                SearchBox.Text = string.Empty;
+            }
 
             if (showFirstTimeHint && !_shownTrayHintOnce)
             {
                 _shownTrayHintOnce = true;
-                ToastNotification.Show("Kestrel is active in System Tray • Press Windows Key or Alt+Space anytime");
+                ToastNotification.Show("Kestrel is active in System Tray • Press Windows Key anytime");
             }
 
             if (_settings.TrimMemoryOnHide)
@@ -441,6 +451,11 @@ namespace Beam
                 Summon();
                 handled = true;
             }
+            else if (msg == DwmApi.WM_SYSCOMMAND && (wParam.ToInt32() & 0xFFF0) == DwmApi.SC_KEYMENU)
+            {
+                // Suppress Win32/WPF system menu mode so the very first keystroke after summon is never swallowed
+                handled = true;
+            }
             else if (msg == DwmApi.WM_CLIPBOARDUPDATE)
             {
                 // Event-driven clipboard notification (0% idle CPU)
@@ -451,6 +466,24 @@ namespace Beam
                 }
             }
             return IntPtr.Zero;
+        }
+
+        private void Window_Activated(object? sender, EventArgs e)
+        {
+            if (AiOverlay.Visibility != Visibility.Visible &&
+                SettingsOverlay.Visibility != Visibility.Visible &&
+                ActionsOverlay.Visibility != Visibility.Visible)
+            {
+                FocusSearchBox();
+            }
+        }
+
+        private void FocusSearchBox()
+        {
+            FocusManager.SetFocusedElement(this, SearchBox);
+            SearchBox.Focus();
+            Keyboard.Focus(SearchBox);
+            SearchBox.CaretIndex = SearchBox.Text.Length;
         }
 
         public void Summon()
@@ -467,11 +500,22 @@ namespace Beam
             DwmApi.ForceForegroundWindow(helper.Handle);
             Activate();
 
-            if (AiOverlay.Visibility != Visibility.Visible && SettingsOverlay.Visibility != Visibility.Visible)
+            if (AiOverlay.Visibility != Visibility.Visible &&
+                SettingsOverlay.Visibility != Visibility.Visible &&
+                ActionsOverlay.Visibility != Visibility.Visible)
             {
-                SearchBox.Focus();
-                Keyboard.Focus(SearchBox);
-                SearchBox.SelectAll();
+                FocusSearchBox();
+                Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+                {
+                    if (IsVisible &&
+                        AiOverlay.Visibility != Visibility.Visible &&
+                        SettingsOverlay.Visibility != Visibility.Visible &&
+                        ActionsOverlay.Visibility != Visibility.Visible &&
+                        !SearchBox.IsKeyboardFocused)
+                    {
+                        FocusSearchBox();
+                    }
+                }));
             }
         }
 
@@ -490,7 +534,7 @@ namespace Beam
             }
         }
 
-        private void SwitchMode(LauncherMode mode)
+        private void SwitchMode(LauncherMode mode, bool focusSearch = true)
         {
             _currentMode = mode;
             SearchBox.Text = string.Empty;
@@ -501,39 +545,41 @@ namespace Beam
                 BrandLogoPath.Visibility = Visibility.Visible;
                 ActiveModePill.Visibility = Visibility.Collapsed;
                 FilterTabsPanel.Visibility = Visibility.Visible;
-                PlaceholderText.Text = "Search apps, 'gemini', commands, window snap, math, or files...";
+                PlaceholderText.Text = "Search apps, commands, or files...";
             }
             else if (mode == LauncherMode.ClipboardHistory)
             {
                 BackButtonBorder.Visibility = Visibility.Visible;
                 BrandLogoPath.Visibility = Visibility.Collapsed;
                 ActiveModePill.Visibility = Visibility.Visible;
-                ActiveModeText.Text = "Clipboard History";
+                ActiveModeText.Text = "Clipboard";
                 FilterTabsPanel.Visibility = Visibility.Collapsed;
-                PlaceholderText.Text = "Search copied clipboard items (Click or Enter to Paste)...";
+                PlaceholderText.Text = "Filter clipboard history...";
             }
             else if (mode == LauncherMode.ProcessKiller)
             {
                 BackButtonBorder.Visibility = Visibility.Visible;
                 BrandLogoPath.Visibility = Visibility.Collapsed;
                 ActiveModePill.Visibility = Visibility.Visible;
-                ActiveModeText.Text = "Kill Process";
+                ActiveModeText.Text = "Processes";
                 FilterTabsPanel.Visibility = Visibility.Collapsed;
-                PlaceholderText.Text = "Filter running processes by name or window title...";
+                PlaceholderText.Text = "Filter running processes...";
             }
             else if (mode == LauncherMode.FileSearch)
             {
                 BackButtonBorder.Visibility = Visibility.Visible;
                 BrandLogoPath.Visibility = Visibility.Collapsed;
                 ActiveModePill.Visibility = Visibility.Visible;
-                ActiveModeText.Text = "Search Files";
+                ActiveModeText.Text = "Files";
                 FilterTabsPanel.Visibility = Visibility.Collapsed;
-                PlaceholderText.Text = "Fuzzy search files in Desktop, Downloads, Documents & Projects...";
+                PlaceholderText.Text = "Search files...";
             }
 
             UpdateFilter();
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
+            if (focusSearch)
+            {
+                FocusSearchBox();
+            }
         }
 
         private void BackButton_Click(object sender, MouseButtonEventArgs e)
@@ -557,20 +603,22 @@ namespace Beam
                 {
                     bool isSelected = tab == clicked;
                     tab.Background = isSelected
-                        ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(40, 47, 61))
+                        ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1E, 255, 255, 255))
+                        : System.Windows.Media.Brushes.Transparent;
+                    tab.BorderBrush = isSelected
+                        ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x32, 255, 255, 255))
                         : System.Windows.Media.Brushes.Transparent;
                     if (tab.Child is TextBlock tb)
                     {
                         tb.Foreground = isSelected
-                            ? System.Windows.Media.Brushes.White
-                            : new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175));
+                            ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(248, 250, 252))
+                            : new SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184));
                         tb.FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal;
                     }
                 }
 
                 UpdateFilter();
-                SearchBox.Focus();
-                Keyboard.Focus(SearchBox);
+                FocusSearchBox();
             }
         }
 
@@ -591,12 +639,12 @@ namespace Beam
             // Sub-view 1: Clipboard History
             if (_currentMode == LauncherMode.ClipboardHistory)
             {
-                SectionHeaderText.Text = "Recent Copied Items (Click or Press Enter to Paste into Active Window)";
+                SectionHeaderText.Text = "Clipboard History";
                 _currentItems = ClipboardService.GetClipboardLauncherItems(query, () =>
                 {
                     SwitchMode(LauncherMode.MainSearch);
                     HideAndTrim(false);
-                    ToastNotification.Show("✓ Pasted from Clipboard History");
+                    ToastNotification.Show("✓ Pasted from Clipboard");
                 });
                 BindResults();
                 return;
@@ -605,7 +653,7 @@ namespace Beam
             // Sub-view 2: Process Killer
             if (_currentMode == LauncherMode.ProcessKiller)
             {
-                SectionHeaderText.Text = "Active Windows Processes (Sorted by Memory Usage)";
+                SectionHeaderText.Text = "Active Processes";
                 _currentItems = SystemCommandsService.GetProcessKillerItems(query, UpdateFilter);
                 BindResults();
                 return;
@@ -614,7 +662,7 @@ namespace Beam
             // Sub-view 3: Local File Search
             if (_currentMode == LauncherMode.FileSearch)
             {
-                SectionHeaderText.Text = "Local Files (Click or Enter to Open • Ctrl+R to Reveal in Explorer)";
+                SectionHeaderText.Text = "Local Files";
                 _currentItems = FileSearchService.SearchFiles(query, 45);
                 BindResults();
                 return;
@@ -636,7 +684,7 @@ namespace Beam
                 {
                     Id = "math:" + math.Expression,
                     Name = "= " + math.Result,
-                    Subtitle = $"Calculator & Converter • {math.Expression} (Enter/Click: Copy • Shift+Enter: Paste)",
+                    Subtitle = math.Expression,
                     Category = "Calculator",
                     ShortcutBadge = "Copy ↵",
                     Icon = calcIcon,
@@ -678,20 +726,16 @@ namespace Beam
                 pool = pool.Where(x => x.Category.Contains(_activeCategoryFilter, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
+            SectionHeaderText.Text = string.Empty;
+
             if (string.IsNullOrEmpty(query))
             {
-                SectionHeaderText.Text = _activeCategoryFilter == "All"
-                    ? $"Frecency & Top Commands ({_builtInCommands.Count + _allApps.Count} items indexed)"
-                    : $"{_activeCategoryFilter}s";
-
                 list.AddRange(SearchEngine.RankAndFilter(pool, "", 55));
                 _currentItems = list;
                 BindResults();
             }
             else
             {
-                SectionHeaderText.Text = (math.IsValid || dev.IsValid) ? "Instant Results & Top Matches" : "Top Fuzzy & Acronym Matches";
-
                 // Offload ranking and file searching to background Task to keep UI thread completely responsive (<5ms)
                 Task.Run(() =>
                 {
@@ -734,7 +778,7 @@ namespace Beam
             }
             else
             {
-                StatusText.Text = "No matching items";
+                StatusText.Text = "No matches";
                 PrimaryActionLabel.Text = "Search";
             }
         }
@@ -804,6 +848,13 @@ namespace Beam
 
         private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
+            // Never allow Alt key events to put WPF into MenuMode and swallow the first typed letter
+            if (e.Key == Key.System && (e.SystemKey == Key.LeftAlt || e.SystemKey == Key.RightAlt))
+            {
+                e.Handled = true;
+                return;
+            }
+
             // 1. Settings Overlay Open
             if (SettingsOverlay.Visibility == Visibility.Visible)
             {
@@ -941,6 +992,10 @@ namespace Beam
                 e.Handled = true;
                 OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, SearchBox.Text.Trim());
             }
+            else if (!SearchBox.IsKeyboardFocused)
+            {
+                FocusSearchBox();
+            }
         }
 
         private void NavigateResultsList(int direction)
@@ -982,11 +1037,6 @@ namespace Beam
             }
 
             item.Action?.Invoke();
-
-            if (!keepOpen)
-            {
-                SearchBox.Focus();
-            }
         }
 
         private void RunSelectedItemAsAdmin()
@@ -1005,16 +1055,6 @@ namespace Beam
             {
                 HideAndTrim(false);
                 AppScanner.RevealInExplorer(item.Path);
-            }
-        }
-
-        private void CopySelectedItemPath()
-        {
-            if (ResultsList.SelectedItem is LauncherItem item && !string.IsNullOrEmpty(item.Path))
-            {
-                System.Windows.Clipboard.SetText(item.Path);
-                HideAndTrim(false);
-                ToastNotification.Show("✓ Copied File Path to Clipboard");
             }
         }
 
@@ -1097,19 +1137,11 @@ namespace Beam
                     Icon = iconFolder,
                     Execute = RevealSelectedItemInExplorer
                 });
-
-                actions.Add(new ActionItem
-                {
-                    Title = "Copy Full Path to Clipboard",
-                    ShortcutHint = "Ctrl+C",
-                    Icon = iconCopy,
-                    Execute = CopySelectedItemPath
-                });
             }
 
             actions.Add(new ActionItem
             {
-                Title = "Copy Title to Clipboard",
+                Title = "Copy Name",
                 ShortcutHint = "",
                 Icon = iconCopy,
                 Execute = CopySelectedItemName
@@ -1119,7 +1151,7 @@ namespace Beam
             {
                 actions.Add(new ActionItem
                 {
-                    Title = "Open Embedded Google Gemini Chat",
+                    Title = "Open Gemini Chat",
                     ShortcutHint = "Tab",
                     Icon = iconAi,
                     Execute = () => OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, SearchBox.Text.Trim())
@@ -1130,7 +1162,7 @@ namespace Beam
             {
                 actions.Add(new ActionItem
                 {
-                    Title = "Search Local Files",
+                    Title = "Search Files",
                     ShortcutHint = "Ctrl+F",
                     Icon = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathSearch),
                     Execute = () => SwitchMode(LauncherMode.FileSearch)
@@ -1141,7 +1173,7 @@ namespace Beam
             {
                 actions.Add(new ActionItem
                 {
-                    Title = "Open Clipboard History",
+                    Title = "Clipboard History",
                     ShortcutHint = "Ctrl+Shift+V",
                     Icon = IconGenerator.GetSquircleIcon(SquircleTheme.ClipAmber, IconGenerator.PathClipboard),
                     Execute = () => SwitchMode(LauncherMode.ClipboardHistory)
@@ -1150,7 +1182,7 @@ namespace Beam
 
             actions.Add(new ActionItem
             {
-                Title = "Kestrel Preferences & Settings",
+                Title = "Kestrel Preferences",
                 ShortcutHint = "Ctrl+,",
                 Icon = iconGear,
                 Execute = OpenSettingsOverlay
@@ -1166,8 +1198,7 @@ namespace Beam
         private void CloseActionsOverlay()
         {
             ActionsOverlay.Visibility = Visibility.Collapsed;
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
+            FocusSearchBox();
         }
 
         private void ActionsOverlayBackdrop_Click(object sender, MouseButtonEventArgs e)
@@ -1206,13 +1237,13 @@ namespace Beam
             }
             GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
+            LauncherView.Visibility = Visibility.Collapsed;
 
             _isLoadingSettingsUi = true;
             _settings = BeamSettings.Load();
 
-            // Tab 1: General & Hotkeys
+            // Tab 1: General & Hotkeys (Windows Key activation only)
             ChkStartKeyTrigger.IsChecked = _settings.TriggerOnStartKey;
-            ChkAltSpaceTrigger.IsChecked = _settings.EnableAltSpaceHotkey;
             ChkLaunchStartup.IsChecked = _settings.LaunchOnStartup;
             ChkHideOutside.IsChecked = _settings.HideOnClickOutside;
             ChkToastNotifications.IsChecked = _settings.EnableToastNotifications;
@@ -1263,18 +1294,18 @@ namespace Beam
 
                 p.Txt.Text = hasKey ? $"{p.Label} •" : p.Label;
                 p.Border.Background = isSelected
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(35, 40, 54))
-                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(18, 21, 28));
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 255, 255, 255))
+                    : new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x0C, 255, 255, 255));
                 p.Border.BorderBrush = isSelected
                     ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 99, 99))
                     : hasKey
-                        ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(45, 90, 71))
-                        : new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 39, 53));
+                        ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x55, 16, 185, 129))
+                        : new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 255, 255, 255));
                 p.Txt.Foreground = isSelected
                     ? System.Windows.Media.Brushes.White
                     : hasKey
                         ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(110, 231, 183))
-                        : new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175));
+                        : new SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184));
                 p.Txt.FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal;
 
                 if (isSelected)
@@ -1309,14 +1340,14 @@ namespace Beam
             {
                 bool active = string.Equals(tabBorders[i].Tag as string, tabName, StringComparison.OrdinalIgnoreCase);
                 tabBorders[i].Background = active
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(35, 40, 54))
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 255, 255, 255))
                     : System.Windows.Media.Brushes.Transparent;
                 tabBorders[i].BorderBrush = active
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(51, 59, 79))
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x32, 255, 255, 255))
                     : System.Windows.Media.Brushes.Transparent;
                 tabTexts[i].Foreground = active
                     ? System.Windows.Media.Brushes.White
-                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175));
+                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184));
                 tabTexts[i].FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
             }
 
@@ -1344,7 +1375,6 @@ namespace Beam
         private void ApplyUiToSettings()
         {
             _settings.TriggerOnStartKey = ChkStartKeyTrigger.IsChecked == true;
-            _settings.EnableAltSpaceHotkey = ChkAltSpaceTrigger.IsChecked == true;
             _settings.LaunchOnStartup = ChkLaunchStartup.IsChecked == true;
             _settings.HideOnClickOutside = ChkHideOutside.IsChecked == true;
             _settings.EnableToastNotifications = ChkToastNotifications.IsChecked == true;
@@ -1499,8 +1529,8 @@ namespace Beam
             ApplyUiToSettings();
             _settings.Save(notify: true);
             SettingsOverlay.Visibility = Visibility.Collapsed;
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
+            LauncherView.Visibility = Visibility.Visible;
+            FocusSearchBox();
         }
 
         private void SaveSettings_Click(object sender, MouseButtonEventArgs e)
@@ -1570,10 +1600,10 @@ namespace Beam
                     RenderTransform = new RotateTransform(rnd.Next(0, 360))
                 };
 
-                double startX = 380 + rnd.Next(-80, 80);
-                double startY = 260 + rnd.Next(-40, 40);
-                double endX = startX + rnd.Next(-360, 360);
-                double endY = rnd.Next(480, 560);
+                double startX = 335 + rnd.Next(-70, 70);
+                double startY = 210 + rnd.Next(-35, 35);
+                double endX = startX + rnd.Next(-300, 300);
+                double endY = rnd.Next(380, 460);
 
                 Canvas.SetLeft(rect, startX);
                 Canvas.SetTop(rect, startY);
@@ -1625,6 +1655,7 @@ namespace Beam
         {
             SettingsOverlay.Visibility = Visibility.Collapsed;
             ActionsOverlay.Visibility = Visibility.Collapsed;
+            LauncherView.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Visible;
 
             var cleanedPrompt = promptInput.Trim();
@@ -1849,16 +1880,16 @@ namespace Beam
             {
                 var prevUser = new Border
                 {
-                    Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(29, 33, 43)),
-                    BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(47, 54, 70)),
+                    Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x14, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x24, 255, 255, 255)),
                     BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(8),
+                    CornerRadius = new CornerRadius(10),
                     Padding = new Thickness(12, 8, 12, 8),
                     Margin = new Thickness(0, 0, 0, 6),
                     Child = new TextBlock
                     {
                         Text = "You: " + AiUserPromptText.Text,
-                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(209, 213, 219)),
+                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(226, 232, 240)),
                         FontSize = 13,
                         FontWeight = FontWeights.SemiBold,
                         TextWrapping = TextWrapping.Wrap
@@ -1867,16 +1898,16 @@ namespace Beam
 
                 var prevAi = new Border
                 {
-                    Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(22, 25, 34)),
-                    BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 44, 58)),
+                    Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x0D, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1C, 255, 255, 255)),
                     BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(8),
+                    CornerRadius = new CornerRadius(10),
                     Padding = new Thickness(12, 10, 12, 10),
                     Margin = new Thickness(0, 0, 0, 12),
                     Child = new TextBlock
                     {
                         Text = AiResponseText.Text,
-                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(249, 250, 251)),
+                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(248, 250, 252)),
                         FontSize = 13.5,
                         TextWrapping = TextWrapping.Wrap
                     }
@@ -1960,8 +1991,8 @@ namespace Beam
             }
             GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
+            LauncherView.Visibility = Visibility.Visible;
+            FocusSearchBox();
         }
 
         private void CopyAiResponse_Click(object sender, MouseButtonEventArgs e) => CopyAiResponse();

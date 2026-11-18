@@ -39,6 +39,15 @@ namespace Beam.Interop
         public static extern bool IsIconic(IntPtr hWnd);
 
         [DllImport("user32.dll")]
+        public static extern IntPtr SetFocus(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
         [DllImport("user32.dll")]
@@ -89,6 +98,8 @@ namespace Beam.Interop
 
         public const int SW_SHOW = 5;
         public const int SW_RESTORE = 9;
+        public const int WM_SYSCOMMAND = 0x0112;
+        public const int SC_KEYMENU = 0xF100;
         public const int WM_CLIPBOARDUPDATE = 0x031D;
 
         public const int GWL_EXSTYLE = -20;
@@ -96,7 +107,6 @@ namespace Beam.Interop
         public const int WS_EX_TRANSPARENT = 0x00000020;
         public const int WS_EX_NOACTIVATE = 0x08000000;
 
-        private const byte VK_MENU = 0x12; // Alt key
         private const byte VK_CONTROL = 0x11;
         private const byte VK_V = 0x56;
         private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -159,20 +169,44 @@ namespace Beam.Interop
         }
 
         /// <summary>
-        /// Reliably forces the Beam window to foreground on Windows 11 without AttachThreadInput deadlocks.
-        /// Uses the Win32 Alt-Key permission grant pattern.
+        /// Reliably forces the Beam window to foreground on Windows 11 without AttachThreadInput deadlocks
+        /// and without injecting synthetic Alt (VK_MENU) keystrokes that swallow the first typed letter.
         /// </summary>
         public static void ForceForegroundWindow(IntPtr beamHwnd)
         {
             if (beamHwnd == IntPtr.Zero) return;
             try
             {
-                keybd_event(VK_MENU, 0, 0, EXTRA_SIG);
-                keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, EXTRA_SIG);
-                ShowWindow(beamHwnd, SW_RESTORE);
-                BringWindowToTop(beamHwnd);
-                SetForegroundWindow(beamHwnd);
-                SetActiveWindow(beamHwnd);
+                IntPtr fg = GetForegroundWindow();
+                uint fgThread = fg != IntPtr.Zero ? GetWindowThreadProcessId(fg, out _) : 0;
+                uint appThread = GetCurrentThreadId();
+                bool attached = false;
+
+                if (fgThread != 0 && fgThread != appThread)
+                {
+                    attached = AttachThreadInput(fgThread, appThread, true);
+                }
+
+                try
+                {
+                    ShowWindow(beamHwnd, IsIconic(beamHwnd) ? SW_RESTORE : SW_SHOW);
+                    BringWindowToTop(beamHwnd);
+                    if (!SetForegroundWindow(beamHwnd) && GetForegroundWindow() != beamHwnd)
+                    {
+                        // Harmless non-menu keyup (0xFC = VK_NONAME) releases foreground lock without triggering Alt MenuMode
+                        keybd_event(0xFC, 0, KEYEVENTF_KEYUP, EXTRA_SIG);
+                        SetForegroundWindow(beamHwnd);
+                    }
+                    SetActiveWindow(beamHwnd);
+                    SetFocus(beamHwnd);
+                }
+                finally
+                {
+                    if (attached)
+                    {
+                        AttachThreadInput(fgThread, appThread, false);
+                    }
+                }
             }
             catch { }
         }

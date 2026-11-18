@@ -16,8 +16,8 @@
     <Canvas x:Name="OverlayCanvas">
         <!-- Floating Instruction Pill -->
         <Border x:Name="HintPill"
-                Background="#EE1A1F2C"
-                BorderBrush="#33FFFFFF"
+                Background="#CC0A0D14"
+                BorderBrush="#38FFFFFF"
                 BorderThickness="1"
                 CornerRadius="16"
                 Padding="16,8">
@@ -25,13 +25,13 @@
                 <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.4" Color="#000000" />
             </Border.Effect>
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="✦ Text Extractor (OCR)"
-                           FontWeight="Bold"
+                <TextBlock Text="✦ Text Extractor"
+                           FontWeight="SemiBold"
                            Foreground="#FF6363"
                            FontSize="12"
                            VerticalAlignment="Center" />
-                <TextBlock Text=" • Drag box over text • Release to copy to clipboard • Esc to cancel"
-                           Foreground="#E5E7EB"
+                <TextBlock Text=" • Drag over text to copy • Esc to cancel"
+                           Foreground="#E2E8F0"
                            FontSize="12"
                            VerticalAlignment="Center" />
             </StackPanel>

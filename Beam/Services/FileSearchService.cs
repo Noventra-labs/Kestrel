@@ -138,9 +138,9 @@ namespace Beam.Services
                     {
                         Id = "file:" + pathCopy,
                         Name = f.Name,
-                        Subtitle = f.Directory,
+                        Subtitle = string.Empty,
                         Category = string.IsNullOrEmpty(f.Extension) ? "File" : f.Extension.TrimStart('.').ToUpperInvariant() + " File",
-                        ShortcutBadge = "Open ↵",
+                        ShortcutBadge = string.Empty,
                         Icon = ShellIconHelper.GetFastFileIcon(pathCopy, f.Extension),
                         Path = pathCopy,
                         Action = () => AppScanner.LaunchFile(pathCopy)
@@ -178,9 +178,9 @@ namespace Beam.Services
                 {
                     Id = "file:" + pathCopy,
                     Name = f.Name,
-                    Subtitle = f.Directory,
+                    Subtitle = string.Empty,
                     Category = string.IsNullOrEmpty(f.Extension) ? "File" : f.Extension.TrimStart('.').ToUpperInvariant() + " File",
-                    ShortcutBadge = "Open ↵",
+                    ShortcutBadge = string.Empty,
                     Icon = ShellIconHelper.GetFastFileIcon(pathCopy, f.Extension),
                     Path = pathCopy,
                     Action = () => AppScanner.LaunchFile(pathCopy)

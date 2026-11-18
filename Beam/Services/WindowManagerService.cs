@@ -243,22 +243,22 @@ namespace Beam.Services
 
             return new List<LauncherItem>
             {
-                new() { Id = "win:pin_top", Name = "Always on Top (Pin Window)", Subtitle = "PowerToys Always on Top — Keep active window pinned above all others", Category = "Window Management", ShortcutBadge = "Pin 📌", Icon = iconPin, Action = () => ToggleAlwaysOnTop() },
-                new() { Id = "win:left", Name = "Left Half", Subtitle = "Window Management — Snap active window to left 50%", Category = "Window Management", ShortcutBadge = "Win+←", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.LeftHalf) },
-                new() { Id = "win:right", Name = "Right Half", Subtitle = "Window Management — Snap active window to right 50%", Category = "Window Management", ShortcutBadge = "Win+→", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.RightHalf) },
-                new() { Id = "win:max", Name = "Maximize Window", Subtitle = "Window Management — Expand active window to full screen", Category = "Window Management", ShortcutBadge = "Win+↑", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.Maximize) },
-                new() { Id = "win:almostmax", Name = "Almost Maximize", Subtitle = "Window Management — Resize active window to 92% centered", Category = "Window Management", Icon = iconCenter, Action = () => ApplySnap(WindowSnapLayout.AlmostMaximize) },
-                new() { Id = "win:center", Name = "Center Window", Subtitle = "Window Management — Center active window on screen", Category = "Window Management", Icon = iconCenter, Action = () => ApplySnap(WindowSnapLayout.Center) },
-                new() { Id = "win:top", Name = "Top Half", Subtitle = "Window Management — Snap active window to top 50%", Category = "Window Management", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.TopHalf) },
-                new() { Id = "win:bottom", Name = "Bottom Half", Subtitle = "Window Management — Snap active window to bottom 50%", Category = "Window Management", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.BottomHalf) },
-                new() { Id = "win:tl", Name = "Top Left Quarter", Subtitle = "Window Management — Snap to top-left corner", Category = "Window Management", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.TopLeftQuarter) },
-                new() { Id = "win:tr", Name = "Top Right Quarter", Subtitle = "Window Management — Snap to top-right corner", Category = "Window Management", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.TopRightQuarter) },
-                new() { Id = "win:bl", Name = "Bottom Left Quarter", Subtitle = "Window Management — Snap to bottom-left corner", Category = "Window Management", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.BottomLeftQuarter) },
-                new() { Id = "win:br", Name = "Bottom Right Quarter", Subtitle = "Window Management — Snap to bottom-right corner", Category = "Window Management", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.BottomRightQuarter) },
-                new() { Id = "win:firstthird", Name = "First Third", Subtitle = "Window Management — Snap to left 33% of display", Category = "Window Management", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.FirstThird) },
-                new() { Id = "win:lasttwothirds", Name = "Last Two Thirds", Subtitle = "Window Management — Snap to right 66% of display", Category = "Window Management", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.LastTwoThirds) },
-                new() { Id = "win:restore", Name = "Restore Window", Subtitle = "Window Management — Unmaximize active window", Category = "Window Management", Icon = iconCenter, Action = () => ApplySnap(WindowSnapLayout.Restore) },
-                new() { Id = "win:minall", Name = "Minimize All Windows", Subtitle = "Window Management — Show Desktop", Category = "Window Management", ShortcutBadge = "Win+D", Icon = iconCenter, Action = MinimizeAllWindows }
+                new() { Id = "win:pin_top", Name = "Always on Top (Pin Window)", Subtitle = string.Empty, Category = "Window Management", ShortcutBadge = "Pin", Icon = iconPin, Action = () => ToggleAlwaysOnTop() },
+                new() { Id = "win:left", Name = "Left Half", Subtitle = string.Empty, Category = "Window Management", ShortcutBadge = "Win+←", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.LeftHalf) },
+                new() { Id = "win:right", Name = "Right Half", Subtitle = string.Empty, Category = "Window Management", ShortcutBadge = "Win+→", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.RightHalf) },
+                new() { Id = "win:max", Name = "Maximize Window", Subtitle = string.Empty, Category = "Window Management", ShortcutBadge = "Win+↑", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.Maximize) },
+                new() { Id = "win:almostmax", Name = "Almost Maximize", Subtitle = string.Empty, Category = "Window Management", Icon = iconCenter, Action = () => ApplySnap(WindowSnapLayout.AlmostMaximize) },
+                new() { Id = "win:center", Name = "Center Window", Subtitle = string.Empty, Category = "Window Management", Icon = iconCenter, Action = () => ApplySnap(WindowSnapLayout.Center) },
+                new() { Id = "win:top", Name = "Top Half", Subtitle = string.Empty, Category = "Window Management", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.TopHalf) },
+                new() { Id = "win:bottom", Name = "Bottom Half", Subtitle = string.Empty, Category = "Window Management", Icon = iconMax, Action = () => ApplySnap(WindowSnapLayout.BottomHalf) },
+                new() { Id = "win:tl", Name = "Top Left Quarter", Subtitle = string.Empty, Category = "Window Management", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.TopLeftQuarter) },
+                new() { Id = "win:tr", Name = "Top Right Quarter", Subtitle = string.Empty, Category = "Window Management", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.TopRightQuarter) },
+                new() { Id = "win:bl", Name = "Bottom Left Quarter", Subtitle = string.Empty, Category = "Window Management", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.BottomLeftQuarter) },
+                new() { Id = "win:br", Name = "Bottom Right Quarter", Subtitle = string.Empty, Category = "Window Management", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.BottomRightQuarter) },
+                new() { Id = "win:firstthird", Name = "First Third", Subtitle = string.Empty, Category = "Window Management", Icon = iconLeft, Action = () => ApplySnap(WindowSnapLayout.FirstThird) },
+                new() { Id = "win:lasttwothirds", Name = "Last Two Thirds", Subtitle = string.Empty, Category = "Window Management", Icon = iconRight, Action = () => ApplySnap(WindowSnapLayout.LastTwoThirds) },
+                new() { Id = "win:restore", Name = "Restore Window", Subtitle = string.Empty, Category = "Window Management", Icon = iconCenter, Action = () => ApplySnap(WindowSnapLayout.Restore) },
+                new() { Id = "win:minall", Name = "Minimize All Windows", Subtitle = string.Empty, Category = "Window Management", ShortcutBadge = "Win+D", Icon = iconCenter, Action = MinimizeAllWindows }
             };
         }
     }

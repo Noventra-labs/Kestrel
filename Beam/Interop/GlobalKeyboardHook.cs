@@ -12,10 +12,8 @@ namespace Beam.Interop
         private const int WM_SYSKEYDOWN = 0x0104;
         private const int WM_SYSKEYUP = 0x0105;
 
-        private const ushort VK_SPACE = 0x20;
         private const ushort VK_LWIN = 0x5B;
         private const ushort VK_RWIN = 0x5C;
-        private const int VK_MENU = 0x12; // Alt key
         private const ushort VK_LCONTROL = 0xA2; // Left Control used to cancel Windows Start Menu chord
 
         private const uint INPUT_KEYBOARD = 1;
@@ -32,7 +30,6 @@ namespace Beam.Interop
         private bool _winKeyDownAlone = false;
 
         public bool EnableStartKeyTrigger { get; set; } = true;
-        public bool EnableAltSpaceHotkey { get; set; } = true;
         public static IntPtr LastActiveWindow { get; private set; } = IntPtr.Zero;
         public static IntPtr BeamWindowHandle { get; set; } = IntPtr.Zero;
 
@@ -48,9 +45,6 @@ namespace Beam.Interop
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-        [DllImport("user32.dll")]
-        private static extern short GetAsyncKeyState(int vKey);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
@@ -201,25 +195,11 @@ namespace Beam.Interop
                 bool isKeyDown = wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN;
                 bool isKeyUp = wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP;
 
-                // 1. Check Alt + Space
-                if (EnableAltSpaceHotkey && isKeyDown && kbd.vkCode == VK_SPACE)
-                {
-                    bool altDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0 || ((kbd.flags & 0x20) != 0);
-                    if (altDown)
-                    {
-                        _winKeyDownAlone = false;
-                        CaptureActiveWindow();
-                        _onTrigger?.Invoke();
-                        return (IntPtr)1; // Suppress native Windows system menu
-                    }
-                }
-
-                // 2. Check Start Button (Windows Key) solo tap
+                // Start Button (Windows Key) solo tap only
                 if (EnableStartKeyTrigger)
                 {
                     if (kbd.vkCode == VK_LWIN || kbd.vkCode == VK_RWIN)
                     {
-                        App.Log($"GlobalKeyboardHook: WinKey event: isKeyDown={isKeyDown}, isKeyUp={isKeyUp}, dwExtraInfo=0x{kbd.dwExtraInfo:X}");
                         if (isKeyDown)
                         {
                             if (!_winKeyDown)
@@ -247,10 +227,7 @@ namespace Beam.Interop
                                 inputs[0] = CreateKeyInput(VK_LCONTROL, false, EXTRA_INFO_SIGNATURE);
                                 inputs[1] = CreateKeyInput(VK_LCONTROL, true, EXTRA_INFO_SIGNATURE);
                                 inputs[2] = CreateKeyInput((ushort)kbd.vkCode, true, EXTRA_INFO_SIGNATURE);
-                                uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-                                int err = Marshal.GetLastWin32Error();
-
-                                App.Log($"GlobalKeyboardHook: Win solo tap masked with Left Ctrl (SendInput sent={sent}/3, err={err}), triggering launcher");
+                                SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
 
                                 // 3. Trigger Kestrel launcher
                                 _onTrigger?.Invoke();
