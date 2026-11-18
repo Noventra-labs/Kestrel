@@ -144,16 +144,22 @@ namespace Beam.Interop
             var (c1, c2) = GetThemeColors(theme);
             var group = new DrawingGroup();
 
-            // 1. Raycast Squircle Rounded Box (32x32 with subtle gradient and light inner border)
-            var bgBrush = new LinearGradientBrush(c1, c2, new System.Windows.Point(0, 0), new System.Windows.Point(1, 1));
+            // 1. Ultra-transparent Frosted Glass Squircle Rounded Box (32x32 with subtle theme-tinted gradient and border)
+            var bgBrush = new LinearGradientBrush(
+                System.Windows.Media.Color.FromArgb(0x16, c1.R, c1.G, c1.B),
+                System.Windows.Media.Color.FromArgb(0x08, c2.R, c2.G, c2.B),
+                new System.Windows.Point(0, 0),
+                new System.Windows.Point(1, 1));
             bgBrush.Freeze();
             var rectGeo = new RectangleGeometry(new Rect(0, 0, 32, 32), 8.0, 8.0);
             rectGeo.Freeze();
-            var borderPen = new System.Windows.Media.Pen(new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 255, 255, 255)), 1.0);
+            var borderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x34, c1.R, c1.G, c1.B));
+            borderBrush.Freeze();
+            var borderPen = new System.Windows.Media.Pen(borderBrush, 1.0);
             borderPen.Freeze();
             group.Children.Add(new GeometryDrawing(bgBrush, borderPen, rectGeo));
 
-            // 2. Lucide Vector Icon scaled & centered precisely inside 32x32
+            // 2. Lucide Vector Icon scaled & centered precisely inside 32x32 (transparent interior outline stroke)
             try
             {
                 var pathGeo = Geometry.Parse(svgPath);
@@ -173,42 +179,50 @@ namespace Beam.Interop
                 transformedGeo.Transform = transformGroup;
                 transformedGeo.Freeze();
 
-                System.Windows.Media.Brush iconBrush = new SolidColorBrush(Colors.White);
+                System.Windows.Media.Brush iconBrush = new SolidColorBrush(GetThemeGlyphColor(theme));
                 iconBrush.Freeze();
 
-                System.Windows.Media.Pen? iconPen;
-                if (asStroke || svgPath.StartsWith("M4,5") || svgPath.StartsWith("M12,2 L20") || svgPath.StartsWith("M15,3") || svgPath.StartsWith("M4,14") || svgPath.StartsWith("M12,2 V12") || svgPath.StartsWith("M2,22") || svgPath.StartsWith("M3,7") || svgPath.StartsWith("M18,8") || svgPath.StartsWith("M4,9") || svgPath.StartsWith("M22,12") || svgPath.StartsWith("M8,3"))
+                var iconPen = new System.Windows.Media.Pen(iconBrush, 1.9)
                 {
-                    iconPen = new System.Windows.Media.Pen(iconBrush, 2.0)
-                    {
-                        StartLineCap = PenLineCap.Round,
-                        EndLineCap = PenLineCap.Round,
-                        LineJoin = PenLineJoin.Round
-                    };
-                    iconPen.Freeze();
-                    group.Children.Add(new GeometryDrawing(null, iconPen, transformedGeo));
-                }
-                else
-                {
-                    iconPen = new System.Windows.Media.Pen(iconBrush, 0.75)
-                    {
-                        StartLineCap = PenLineCap.Round,
-                        EndLineCap = PenLineCap.Round,
-                        LineJoin = PenLineJoin.Round
-                    };
-                    iconPen.Freeze();
-                    group.Children.Add(new GeometryDrawing(iconBrush, iconPen, transformedGeo));
-                }
+                    StartLineCap = PenLineCap.Round,
+                    EndLineCap = PenLineCap.Round,
+                    LineJoin = PenLineJoin.Round
+                };
+                iconPen.Freeze();
+                group.Children.Add(new GeometryDrawing(null, iconPen, transformedGeo));
             }
             catch
             {
-                group.Children.Add(new GeometryDrawing(System.Windows.Media.Brushes.White, null, new EllipseGeometry(new System.Windows.Point(16, 16), 5, 5)));
+                var fallbackBrush = new SolidColorBrush(GetThemeGlyphColor(theme));
+                fallbackBrush.Freeze();
+                var fallbackPen = new System.Windows.Media.Pen(fallbackBrush, 1.9);
+                fallbackPen.Freeze();
+                group.Children.Add(new GeometryDrawing(null, fallbackPen, new EllipseGeometry(new System.Windows.Point(16, 16), 5, 5)));
             }
 
             var drawingImage = new DrawingImage(group);
             drawingImage.Freeze();
             Cache[key] = drawingImage;
             return drawingImage;
+        }
+
+        private static System.Windows.Media.Color GetThemeGlyphColor(SquircleTheme theme)
+        {
+            return theme switch
+            {
+                SquircleTheme.BrandCoral => System.Windows.Media.Color.FromRgb(255, 138, 138),
+                SquircleTheme.WindowBlue => System.Windows.Media.Color.FromRgb(122, 184, 255),
+                SquircleTheme.CalcGreen => System.Windows.Media.Color.FromRgb(74, 222, 128),
+                SquircleTheme.ClipAmber => System.Windows.Media.Color.FromRgb(252, 211, 77),
+                SquircleTheme.SystemPurple => System.Windows.Media.Color.FromRgb(196, 181, 253),
+                SquircleTheme.ProcessRose => System.Windows.Media.Color.FromRgb(244, 114, 182),
+                SquircleTheme.WebCyan => System.Windows.Media.Color.FromRgb(103, 232, 249),
+                SquircleTheme.SettingsSlate => System.Windows.Media.Color.FromRgb(203, 213, 225),
+                SquircleTheme.GoldStar => System.Windows.Media.Color.FromRgb(253, 224, 71),
+                SquircleTheme.AdminGold => System.Windows.Media.Color.FromRgb(250, 204, 21),
+                SquircleTheme.TerminalSlate => System.Windows.Media.Color.FromRgb(226, 232, 240),
+                _ => System.Windows.Media.Color.FromRgb(248, 250, 252)
+            };
         }
 
         private static (System.Windows.Media.Color, System.Windows.Media.Color) GetThemeColors(SquircleTheme theme)

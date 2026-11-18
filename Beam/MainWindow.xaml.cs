@@ -314,28 +314,66 @@ namespace Beam
 
                 icon ??= System.Drawing.SystemIcons.Application;
 
-                var menu = new Forms.ContextMenuStrip();
+                var menu = new Forms.ContextMenuStrip
+                {
+                    Renderer = new TrayMenuRenderer(),
+                    Font = TrayMenuRenderer.GetMenuFont(),
+                    MinimumSize = new System.Drawing.Size(260, 0)
+                };
 
-                var openItem = new Forms.ToolStripMenuItem("Open Kestrel (Windows Key)");
-                openItem.Font = new System.Drawing.Font(openItem.Font, System.Drawing.FontStyle.Bold);
+                void ApplyDwmDarkAndRound()
+                {
+                    try
+                    {
+                        if (menu.IsHandleCreated)
+                        {
+                            int darkMode = 1;
+                            DwmApi.DwmSetWindowAttribute(menu.Handle, DwmApi.DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
+                            int round = DwmApi.DWMWCP_ROUND;
+                            DwmApi.DwmSetWindowAttribute(menu.Handle, DwmApi.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
+                        }
+                    }
+                    catch { }
+                }
+
+                menu.HandleCreated += (s, e) => ApplyDwmDarkAndRound();
+                menu.Opening += (s, e) => ApplyDwmDarkAndRound();
+
+                var openItem = new Forms.ToolStripMenuItem("Open Kestrel")
+                {
+                    ShortcutKeyDisplayString = "Win",
+                    Tag = "Primary"
+                };
                 openItem.Click += (s, e) => Dispatcher.Invoke(Summon);
 
-                var geminiItem = new Forms.ToolStripMenuItem("Open Embedded Gemini Chat (Tab)");
+                var geminiItem = new Forms.ToolStripMenuItem("Embedded Gemini Chat")
+                {
+                    ShortcutKeyDisplayString = "Tab"
+                };
                 geminiItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, ""); });
 
-                var fileItem = new Forms.ToolStripMenuItem("Search Local Files (Ctrl + F)");
+                var fileItem = new Forms.ToolStripMenuItem("Search Local Files")
+                {
+                    ShortcutKeyDisplayString = "Ctrl+F"
+                };
                 fileItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); SwitchMode(LauncherMode.FileSearch); });
 
-                var clipItem = new Forms.ToolStripMenuItem("Clipboard History (Ctrl + Shift + V)");
+                var clipItem = new Forms.ToolStripMenuItem("Clipboard History")
+                {
+                    ShortcutKeyDisplayString = "Ctrl+Shift+V"
+                };
                 clipItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); SwitchMode(LauncherMode.ClipboardHistory); });
 
-                var procItem = new Forms.ToolStripMenuItem("Kill Process Manager");
+                var procItem = new Forms.ToolStripMenuItem("Process Manager");
                 procItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); SwitchMode(LauncherMode.ProcessKiller); });
 
-                var settingsItem = new Forms.ToolStripMenuItem("Preferences & Settings (Ctrl + ,)");
+                var settingsItem = new Forms.ToolStripMenuItem("Preferences && Settings")
+                {
+                    ShortcutKeyDisplayString = "Ctrl+,"
+                };
                 settingsItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenSettingsOverlay(); });
 
-                var exitItem = new Forms.ToolStripMenuItem("Exit Kestrel Completely");
+                var exitItem = new Forms.ToolStripMenuItem("Exit Kestrel");
                 exitItem.Click += (s, e) => Dispatcher.Invoke(() =>
                 {
                     CloseForReal();

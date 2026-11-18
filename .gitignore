@@ -1,4 +1,6 @@
-# Visual Studio / .NET
+# =============================================================================
+# Visual Studio / .NET Build Artifacts & User State
+# =============================================================================
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
@@ -10,39 +12,139 @@
 .vs/
 *.pidb
 *.pdb
+*.ilk
+*.aps
+*.ncb
+*.opendb
+*.VC.db
 
-# Compiled binaries
+# Compiled Binaries & Packages
 *.exe
 *.dll
+*.msi
+*.msix
+*.appx
 [Pp]ublish/
+*.nupkg
+*.snupkg
 
-# Git Worktrees
+# BenchmarkDotNet & Profiling Artifacts
+BenchmarkDotNet.Artifacts/
+*.dmp
+*.mdmp
+TestResults/
+coverage/
+*.opencover.xml
+
+# =============================================================================
+# Local Standalone Build & Packaging Scripts
+# =============================================================================
+build-standalone.ps1
+build-standalone.bat
+
+# =============================================================================
+# Design, Product & Internal Architecture Specs
+# =============================================================================
+DESIGN.md
+PRODUCT.md
+
+# =============================================================================
+# Public Web & Landing Page Artifacts
+# =============================================================================
+public/
+public
+
+# =============================================================================
+# Backend Service (Managed Separately)
+# =============================================================================
+beam-backend/
+beam-backend
+
+# =============================================================================
+# Git Worktrees & Local Tooling
+# =============================================================================
 worktrees/
 .worktrees/
 
-# Python
+# =============================================================================
+# AI Agent Workspaces & Skill Artifacts
+# =============================================================================
+.agents/
+.codex/
+.claude/
+.gemini/
+.github/agents/
+.github/skills/
+.github/hooks/
+skills-lock.json
+
+# =============================================================================
+# Python Backend & Tooling (if any)
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
 env/
+.venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Sensitive Environment Configurations
+# =============================================================================
+# IDE & Editor Configurations
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# Node / Frontend Artifacts
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =============================================================================
+# Sensitive Environment Configurations & Secrets
+# =============================================================================
 .env
+.env.local
+.env.*.local
 !.env.example
 
-# Logs and databases
+# =============================================================================
+# Logs & Local Databases
+# =============================================================================
 *.log
 *.sqlite
 *.db
 
-# OS Generated
+# =============================================================================
+# OS Generated Files
+# =============================================================================
 Thumbs.db
 Desktop.ini
 .DS_Store
 
+# =============================================================================
 # Internal Engineering Docs (Local Retrospectives & Architectural Notes)
+# =============================================================================
 docs/
-docs
+
+# =============================================================================
+# Temporary & Archive Files
+# =============================================================================
+*.tmp
+*.bak
+*.cache
+*.trx
+*.zip
+*.tar.gz
+*.7z
 

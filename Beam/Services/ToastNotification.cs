@@ -97,7 +97,7 @@ namespace Beam.Services
 
             var pill = new Border
             {
-                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(204, 10, 13, 20)),
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(136, 10, 13, 20)),
                 BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(56, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(18),

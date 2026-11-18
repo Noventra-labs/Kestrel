@@ -33,9 +33,9 @@
 
         <!-- Smoked Glass Shell Gradient (over Windows 11 DWM Acrylic) -->
         <LinearGradientBrush x:Key="GlassShellFill" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#84090C12" Offset="0" />
-            <GradientStop Color="#9207090E" Offset="0.55" />
-            <GradientStop Color="#9805070B" Offset="1" />
+            <GradientStop Color="#3A090C12" Offset="0" />
+            <GradientStop Color="#4407090E" Offset="0.55" />
+            <GradientStop Color="#4E05070B" Offset="1" />
         </LinearGradientBrush>
 
         <!-- Directional Specular Glass Rim -->
@@ -47,10 +47,10 @@
         </LinearGradientBrush>
 
         <!-- Minimal Frosted Keycap Brush -->
-        <SolidColorBrush x:Key="GlassChipFill" Color="#14FFFFFF" />
-        <SolidColorBrush x:Key="GlassChipBorder" Color="#26FFFFFF" />
-        <SolidColorBrush x:Key="GlassCardFill" Color="#0EFFFFFF" />
-        <SolidColorBrush x:Key="GlassCardBorder" Color="#1EFFFFFF" />
+        <SolidColorBrush x:Key="GlassChipFill" Color="#0EFFFFFF" />
+        <SolidColorBrush x:Key="GlassChipBorder" Color="#22FFFFFF" />
+        <SolidColorBrush x:Key="GlassCardFill" Color="#08FFFFFF" />
+        <SolidColorBrush x:Key="GlassCardBorder" Color="#18FFFFFF" />
 
         <!-- Ultra-Thin Glass ScrollBar -->
         <Style TargetType="ScrollBar">
@@ -145,8 +145,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#1BFFFFFF" />
-                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#30FFFFFF" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#13FFFFFF" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#28FFFFFF" />
                                 <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <MultiTrigger>
@@ -154,7 +154,7 @@
                                     <Condition Property="IsMouseOver" Value="True" />
                                     <Condition Property="IsSelected" Value="False" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#0DFFFFFF" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#08FFFFFF" />
                             </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -194,7 +194,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Row 0: Frosted Omnibar Header -->
-                <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Background="#0AFFFFFF">
+                <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Background="#05FFFFFF">
                     <Grid Margin="18,0,18,0" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -464,7 +464,7 @@
 
                 <!-- Row 3: Minimal Frosted Status Bar -->
                 <Border Grid.Row="3"
-                        Background="#2805070B"
+                        Background="#1205070B"
                         BorderThickness="0,1,0,0"
                         BorderBrush="#14FFFFFF"
                         CornerRadius="0,0,16,16"
@@ -552,13 +552,13 @@
             <!-- ========================================================================= -->
             <Grid x:Name="ActionsOverlay"
                   Visibility="Collapsed"
-                  Background="#4804060A"
+                  Background="#2204060A"
                   MouseLeftButtonDown="ActionsOverlayBackdrop_Click">
                 <Border HorizontalAlignment="Right"
                         VerticalAlignment="Bottom"
                         Width="340"
                         Margin="0,0,16,44"
-                        Background="#CC0B0E16"
+                        Background="#780B0E16"
                         BorderBrush="{StaticResource GlassSpecularBorder}"
                         BorderThickness="1"
                         CornerRadius="12"
@@ -570,7 +570,7 @@
                             <RowDefinition Height="30" />
                         </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0" Background="#0CFFFFFF" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="14,0">
+                        <Border Grid.Row="0" Background="#07FFFFFF" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="14,0">
                             <Grid VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="6" Height="6" Fill="{StaticResource BrandRed}" Margin="0,0,8,0" VerticalAlignment="Center" />
@@ -617,7 +617,7 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
 
-                        <Border Grid.Row="2" Background="#2005070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Padding="14,0">
+                        <Border Grid.Row="2" Background="#1005070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Padding="14,0">
                             <TextBlock Text="↵ Execute  •  Ctrl+Shift+↵ Run as Admin" Foreground="{StaticResource TextMuted}" FontSize="10.5" VerticalAlignment="Center" />
                         </Border>
                     </Grid>
@@ -629,7 +629,7 @@
             <!-- ========================================================================= -->
             <Grid x:Name="AiOverlay"
                   Visibility="Collapsed"
-                  Background="#3006080D">
+                  Background="#1606080D">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="48" />
                     <RowDefinition Height="*" />
@@ -637,7 +637,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Minimal Frosted Header -->
-                <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="18,0" Background="#0CFFFFFF">
+                <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="18,0" Background="#06FFFFFF">
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -668,7 +668,7 @@
                             Visibility="Collapsed"
                             Margin="10,8,10,8"
                             CornerRadius="12"
-                            Background="#CC0F1117"
+                            Background="#680F1117"
                             BorderBrush="#22FFFFFF"
                             BorderThickness="1">
                         <Grid x:Name="GeminiWebHostGrid">
@@ -692,16 +692,16 @@
                             <StackPanel>
                                 <StackPanel x:Name="ApiChatHistoryPanel" />
 
-                                <Border Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,10">
+                                <Border Background="#0CFFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,0,0,10">
                                     <TextBlock x:Name="AiUserPromptText" Text="Ask anything..." Foreground="#F8FAFC" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
                                 </Border>
-                                <Border Background="#0DFFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,0,8">
+                                <Border Background="#08FFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="10" Padding="14,12" Margin="0,0,0,8">
                                     <TextBlock x:Name="AiResponseText" Text="" Foreground="{StaticResource TextPrimary}" FontSize="13.5" LineHeight="21" TextWrapping="Wrap" />
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
 
-                        <Border Grid.Row="1" Background="#1606080D" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Padding="16,10">
+                        <Border Grid.Row="1" Background="#0C06080D" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Padding="16,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -733,7 +733,7 @@
                 </Grid>
 
                 <!-- Bottom Status Strip -->
-                <Border Grid.Row="2" Background="#2405070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Padding="18,0">
+                <Border Grid.Row="2" Background="#1205070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Padding="18,0">
                     <Grid VerticalAlignment="Center">
                         <TextBlock x:Name="AiStatusText" Text="Gemini Ready" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" />
                         <TextBlock Text="Esc to return" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
@@ -746,7 +746,7 @@
             <!-- ========================================================================= -->
             <Grid x:Name="SettingsOverlay"
                   Visibility="Collapsed"
-                  Background="#2406080D">
+                  Background="#1406080D">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="52" />
                     <RowDefinition Height="*" />
@@ -754,7 +754,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Row 0: Frosted Glass Header & Segmented Pill Navigation -->
-                <Border Grid.Row="0" Background="#0CFFFFFF" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="20,0">
+                <Border Grid.Row="0" Background="#06FFFFFF" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="20,0">
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -1122,7 +1122,7 @@
                 </ScrollViewer>
 
                 <!-- Row 2: Minimal Frosted Footer -->
-                <Border Grid.Row="2" Background="#2405070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" CornerRadius="0,0,16,16" Padding="20,0">
+                <Border Grid.Row="2" Background="#1205070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" CornerRadius="0,0,16,16" Padding="20,0">
                     <Grid VerticalAlignment="Center">
                         <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.3.1 • Noventra-Labs" Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
                         <Border HorizontalAlignment="Right"

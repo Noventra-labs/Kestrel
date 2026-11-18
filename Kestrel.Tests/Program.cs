@@ -12,6 +12,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media;
+using Beam.Interop;
 using Beam.Models;
 using Beam.Services;
 using BeamInstaller;
@@ -27,6 +29,7 @@ internal static class Program
         _passed++;
     }
 
+    [STAThread]
     private static async Task Main()
     {
         await RunTestsAsync();
@@ -792,6 +795,41 @@ internal static class Program
                   !File.Exists(oldFile) &&
                   File.Exists(newFile),
                 "temp cleanup execution removes confirmed stale files while keeping recent files intact");
+
+            // 6. Transparent Command Icon Verification
+            foreach (var (theme, path, asStroke) in new[]
+            {
+                (SquircleTheme.CalcGreen, IconGenerator.PathCalculator, false),
+                (SquircleTheme.SettingsSlate, IconGenerator.PathGear, false),
+                (SquircleTheme.TerminalSlate, IconGenerator.PathTerminal, true),
+                (SquircleTheme.BrandCoral, IconGenerator.PathSparkles, false)
+            })
+            {
+                var icon = IconGenerator.GetSquircleIcon(theme, path, asStroke);
+                Check(icon is DrawingImage drawingImage &&
+                      drawingImage.Drawing is DrawingGroup group &&
+                      group.Children.Count == 2 &&
+                      group.Children[0] is GeometryDrawing bgDrawing &&
+                      bgDrawing.Brush is LinearGradientBrush bgGradient &&
+                      bgGradient.GradientStops.Count > 0 &&
+                      bgGradient.GradientStops.All(stop => stop.Color.A <= 0x20) &&
+                      bgDrawing.Pen is System.Windows.Media.Pen borderPen &&
+                      borderPen.Brush is SolidColorBrush borderBrush &&
+                      borderBrush.Color.A <= 0x40 &&
+                      group.Children[1] is GeometryDrawing glyphDrawing &&
+                      glyphDrawing.Brush == null &&
+                      glyphDrawing.Pen != null,
+                    $"squircle icon ({theme}) uses transparent glass container and transparent-interior stroke glyph");
+            }
+
+            var fallbackIcon = IconGenerator.GetSquircleIcon(SquircleTheme.WebCyan, "not-a-valid-svg-path");
+            Check(fallbackIcon is DrawingImage fallbackImage &&
+                  fallbackImage.Drawing is DrawingGroup fallbackGroup &&
+                  fallbackGroup.Children.Count == 2 &&
+                  fallbackGroup.Children[1] is GeometryDrawing fallbackGlyph &&
+                  fallbackGlyph.Brush == null &&
+                  fallbackGlyph.Pen != null,
+                "squircle icon fallback uses transparent-interior stroke glyph");
 
             Console.WriteLine($"{_passed} checks passed.");
         }
