@@ -47,7 +47,7 @@ namespace Beam.Services
                     }
 
                     _hideTimer?.Stop();
-                    _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1350) };
+                    _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2800) };
                     _hideTimer.Tick += (s, e) =>
                     {
                         _hideTimer.Stop();

@@ -26,7 +26,11 @@ namespace Beam
         MainSearch,
         ClipboardHistory,
         ProcessKiller,
-        FileSearch
+        FileSearch,
+        MemoryReduct,
+        PortInspector,
+        TempCleanupPreview,
+        HungAppsPreview
     }
 
     public partial class MainWindow : Window
@@ -52,6 +56,13 @@ namespace Beam
         private readonly List<ChatMessage> _apiConversation = new();
         private string _apiConversationModel = "";
         private CancellationTokenSource? _searchCts;
+        private CancellationTokenSource? _memReductCts;
+        private MemoryCleanResult? _lastMemResult;
+        private bool _isMemOperationRunning = false;
+        private int? _pendingPortKillPid;
+        private string _pendingPortKillLabel = string.Empty;
+        private TempCleanupPreview? _pendingTempPreview;
+        private List<HungWindowInfo>? _pendingHungPreview;
         private Forms.NotifyIcon? _notifyIcon;
         private GlobalKeyboardHook? _keyboardHook;
         private DispatcherTimer? _watchdogTimer;
@@ -122,36 +133,42 @@ namespace Beam
             };
             _watchdogTimer.Start();
 
-            // Start 30s Auto Mem Reduct background monitor matching henrypp/memreduct cooldown
+            // Sustained-pressure Auto Mem Reduct monitor (disabled by default; evaluates every 10s, requires 30s+ pressure)
             _autoMemReductTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(30)
+                Interval = TimeSpan.FromSeconds(10)
             };
             _autoMemReductTimer.Tick += async (_, _) =>
             {
+                if (_isMemOperationRunning) return;
+                bool acquiredRunFlag = false;
                 try
                 {
-                    if (_settings.EnableMemReduct && _settings.AutoMemReductEnabled && MemoryReductService.CanAutoClean)
+                    var stats = MemoryReductService.GetMemoryStats();
+                    if (MemoryReductService.ShouldTriggerAutoClean(stats, _settings, DateTime.UtcNow, out _))
                     {
-                        var stats = MemoryReductService.GetMemoryStats();
-                        if (stats.LoadPercent >= _settings.AutoMemReductThreshold)
-                        {
-                            var res = await MemoryReductService.ReduceMemoryAsync(
-                                purgeStandby: MemoryReductService.IsElevated,
-                                flushModified: MemoryReductService.IsElevated,
-                                sweepProcesses: true);
+                        _isMemOperationRunning = true;
+                        acquiredRunFlag = true;
+                        int fgPid = DwmApi.GetWindowProcessId(GlobalKeyboardHook.LastActiveWindow);
+                        var res = await MemoryReductService.ReduceMemoryAsync(
+                            profile: MemoryCleanProfile.SmartReclaim,
+                            promptElevationIfRequired: false,
+                            explicitForegroundPid: fgPid);
+                        MemoryReductService.RecordAutoCleanOutcome(res, DateTime.UtcNow);
+                        _lastMemResult = res;
+                        SystemCommandsService.RefreshMemoryCommandSubtitles(_builtInCommands);
 
-                            if (res.FreedMb >= 10)
-                            {
-                                ToastNotification.Show(
-                                    res.IsElevated
-                                        ? $"✓ Auto Mem Reduct: RAM {res.LoadBefore}% → {res.LoadAfter}% • Freed {res.FreedMb:N0} MB"
-                                        : $"✓ Auto Mem Reduct: Swept {res.ProcessesCleaned} apps • Freed {res.FreedMb:N0} MB RAM");
-                            }
+                        if (res.WorkingSetTrimmedBytes >= 32L * 1024 * 1024)
+                        {
+                            ToastNotification.Show($"✓ Auto Smart Reclaim: {res.FormatSummary()}");
                         }
                     }
                 }
                 catch { }
+                finally
+                {
+                    if (acquiredRunFlag) _isMemOperationRunning = false;
+                }
             };
             _autoMemReductTimer.Start();
 
@@ -237,7 +254,12 @@ namespace Beam
                 openFileSearchView: () => SwitchMode(LauncherMode.FileSearch),
                 openSettingsView: OpenSettingsOverlay,
                 triggerConfetti: ShootConfetti,
-                openGeminiChat: (webMode, prompt) => OpenGeminiChatOverlay(webMode, prompt)
+                openGeminiChat: (webMode, prompt) => OpenGeminiChatOverlay(webMode, prompt),
+                openMemoryStudioView: () => SwitchMode(LauncherMode.MemoryReduct),
+                executeMemoryProfile: (profile, promptElevation) => _ = RunMemoryCleanAsync(profile, promptElevation),
+                openPortInspectorView: () => OpenPortInspector(string.Empty),
+                openTempCleanupPreview: () => SwitchMode(LauncherMode.TempCleanupPreview),
+                openHungAppsPreview: () => SwitchMode(LauncherMode.HungAppsPreview)
             );
 
             _builtInCommands.Insert(0, new LauncherItem
@@ -383,6 +405,9 @@ namespace Beam
             }
 
             _watchdogTimer?.Stop();
+            _autoMemReductTimer?.Stop();
+            _memReductCts?.Cancel();
+            _memReductCts?.Dispose();
             _searchCts?.Cancel();
             _searchCts?.Dispose();
             BeamSettings.SettingsChanged -= OnSettingsChanged;
@@ -469,6 +494,12 @@ namespace Beam
 
             if (AiOverlay.Visibility != Visibility.Visible && SettingsOverlay.Visibility != Visibility.Visible)
             {
+                SystemCommandsService.RefreshMemoryCommandSubtitles(_builtInCommands);
+                if (_currentMode == LauncherMode.MainSearch || _currentMode == LauncherMode.MemoryReduct)
+                {
+                    UpdateFilter();
+                }
+
                 SearchBox.Focus();
                 Keyboard.Focus(SearchBox);
                 SearchBox.SelectAll();
@@ -490,9 +521,35 @@ namespace Beam
             }
         }
 
+        private void OpenPortInspector(string initialFilter)
+        {
+            _pendingPortKillPid = null;
+            _pendingPortKillLabel = string.Empty;
+            SwitchMode(LauncherMode.PortInspector);
+            if (!string.IsNullOrWhiteSpace(initialFilter))
+            {
+                SearchBox.Text = initialFilter.Trim();
+                SearchBox.CaretIndex = SearchBox.Text.Length;
+            }
+        }
+
         private void SwitchMode(LauncherMode mode)
         {
             _currentMode = mode;
+            if (mode != LauncherMode.PortInspector)
+            {
+                _pendingPortKillPid = null;
+                _pendingPortKillLabel = string.Empty;
+            }
+            if (mode == LauncherMode.TempCleanupPreview)
+            {
+                _pendingTempPreview = null;
+            }
+            if (mode == LauncherMode.HungAppsPreview)
+            {
+                _pendingHungPreview = null;
+            }
+
             SearchBox.Text = string.Empty;
 
             if (mode == LauncherMode.MainSearch)
@@ -529,6 +586,42 @@ namespace Beam
                 ActiveModeText.Text = "Search Files";
                 FilterTabsPanel.Visibility = Visibility.Collapsed;
                 PlaceholderText.Text = "Fuzzy search files in Desktop, Downloads, Documents & Projects...";
+            }
+            else if (mode == LauncherMode.MemoryReduct)
+            {
+                BackButtonBorder.Visibility = Visibility.Visible;
+                BrandLogoPath.Visibility = Visibility.Collapsed;
+                ActiveModePill.Visibility = Visibility.Visible;
+                ActiveModeText.Text = "Memory Reduct";
+                FilterTabsPanel.Visibility = Visibility.Collapsed;
+                PlaceholderText.Text = "Filter apps to trim or exclude (Enter on app: Trim RAM • Ctrl+K: Exclude)...";
+            }
+            else if (mode == LauncherMode.PortInspector)
+            {
+                BackButtonBorder.Visibility = Visibility.Visible;
+                BrandLogoPath.Visibility = Visibility.Collapsed;
+                ActiveModePill.Visibility = Visibility.Visible;
+                ActiveModeText.Text = "Port Inspector";
+                FilterTabsPanel.Visibility = Visibility.Collapsed;
+                PlaceholderText.Text = "Filter by port number, protocol (TCP/UDP), process name, or PID...";
+            }
+            else if (mode == LauncherMode.TempCleanupPreview)
+            {
+                BackButtonBorder.Visibility = Visibility.Visible;
+                BrandLogoPath.Visibility = Visibility.Collapsed;
+                ActiveModePill.Visibility = Visibility.Visible;
+                ActiveModeText.Text = "Temp Cleanup Preview";
+                FilterTabsPanel.Visibility = Visibility.Collapsed;
+                PlaceholderText.Text = "Review stale temporary files before confirming deletion...";
+            }
+            else if (mode == LauncherMode.HungAppsPreview)
+            {
+                BackButtonBorder.Visibility = Visibility.Visible;
+                BrandLogoPath.Visibility = Visibility.Collapsed;
+                ActiveModePill.Visibility = Visibility.Visible;
+                ActiveModeText.Text = "Unresponsive Apps";
+                FilterTabsPanel.Visibility = Visibility.Collapsed;
+                PlaceholderText.Text = "Review unresponsive windows before confirming termination...";
             }
 
             UpdateFilter();
@@ -620,6 +713,34 @@ namespace Beam
                 return;
             }
 
+            // Sub-view 4: Memory Reduct Studio
+            if (_currentMode == LauncherMode.MemoryReduct)
+            {
+                UpdateMemoryStudioFilter(query);
+                return;
+            }
+
+            // Sub-view 5: Port Inspector (Safe TCP/UDP view + two-step kill confirmation)
+            if (_currentMode == LauncherMode.PortInspector)
+            {
+                UpdatePortInspectorFilter(query);
+                return;
+            }
+
+            // Sub-view 6: Two-Stage Temp Cleanup Preview
+            if (_currentMode == LauncherMode.TempCleanupPreview)
+            {
+                UpdateTempCleanupPreviewFilter(query);
+                return;
+            }
+
+            // Sub-view 7: Two-Stage Unresponsive Apps Preview
+            if (_currentMode == LauncherMode.HungAppsPreview)
+            {
+                UpdateHungAppsPreviewFilter(query);
+                return;
+            }
+
             // Main Search Mode (with Fuzzy + Acronym + Frecency Engine)
             _searchCts?.Cancel();
             _searchCts = new CancellationTokenSource();
@@ -648,24 +769,27 @@ namespace Beam
                 });
             }
 
-            // 2. Instant Power Developer Tools Evaluator (guid, sha256, md5, epoch, base64)
+            // 2. Instant Power Developer Tools & Telemetry Evaluator
             var dev = PowerDeveloperToolsService.EvaluateInline(query);
-            if (dev.IsValid)
+            bool devEnabled = dev.ItemIdPrefix == "mem:" ? cfg.EnableMemReduct : cfg.EnablePowerTools;
+            if (dev.IsValid && devEnabled)
             {
-                var devIcon = IconGenerator.GetSquircleIcon(dev.Theme, dev.SvgPath);
+                var devIcon = IconGenerator.GetSquircleIcon(dev.Theme, dev.SvgPath, asStroke: dev.UseStrokeIcon);
+                bool keepOpen = dev.ActionType == "memreduct_studio" || dev.ActionType == "port_inspect";
+                string safeId = dev.ItemIdPrefix == "sec:"
+                    ? "sec:ephemeral"
+                    : dev.ItemIdPrefix + dev.Category;
+
                 list.Add(new LauncherItem
                 {
-                    Id = "dev:" + dev.Result,
+                    Id = safeId,
                     Name = dev.Title,
                     Subtitle = dev.Subtitle,
                     Category = dev.Category,
                     ShortcutBadge = dev.Badge,
                     Icon = devIcon,
-                    Action = () =>
-                    {
-                        System.Windows.Clipboard.SetText(dev.Result);
-                        ToastNotification.Show($"✓ Copied {dev.Category}: {dev.Title}");
-                    }
+                    KeepOpenOnExecute = keepOpen,
+                    Action = () => ExecuteInlineDevAction(dev)
                 });
             }
 
@@ -724,6 +848,698 @@ namespace Beam
             }
         }
 
+        private void ExecuteInlineDevAction(InlineEvalResult dev)
+        {
+            switch (dev.ActionType)
+            {
+                case "memreduct_studio":
+                    SwitchMode(LauncherMode.MemoryReduct);
+                    return;
+
+                case "port_inspect":
+                    OpenPortInspector(dev.ActionArg);
+                    return;
+
+                case "timer_start":
+                {
+                    var split = dev.ActionArg.Split('|', 2);
+                    if (split.Length >= 1 && double.TryParse(split[0], out double sec) && sec > 0)
+                    {
+                        string label = split.Length > 1 ? split[1] : string.Empty;
+                        PowerDeveloperToolsService.StartTimer(TimeSpan.FromSeconds(sec), label);
+                        ToastNotification.Show(string.IsNullOrEmpty(label)
+                            ? $"⏰ Countdown Timer Started ({TimeSpan.FromSeconds(sec):g})"
+                            : $"⏰ Timer Started: {label}");
+                    }
+                    return;
+                }
+
+                case "timer_cancel":
+                    PowerDeveloperToolsService.CancelTimer();
+                    ToastNotification.Show("✓ Countdown Timer Cancelled");
+                    return;
+
+                default:
+                    if (!string.IsNullOrEmpty(dev.Result))
+                    {
+                        System.Windows.Clipboard.SetText(dev.Result);
+                        ToastNotification.Show($"✓ Copied {dev.Category}");
+                    }
+                    return;
+            }
+        }
+
+        private async Task RunMemoryCleanAsync(MemoryCleanProfile profile, bool promptElevation)
+        {
+            if (_isMemOperationRunning)
+            {
+                StatusText.Text = "A memory operation is already running (Press Esc to cancel)...";
+                return;
+            }
+
+            _isMemOperationRunning = true;
+            _memReductCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _memReductCts = cts;
+
+            try
+            {
+                int fgPid = DwmApi.GetWindowProcessId(GlobalKeyboardHook.LastActiveWindow);
+                StatusText.Text = $"Running {profile}... (Press Esc to cancel)";
+
+                var res = await MemoryReductService.ReduceMemoryAsync(
+                    promptElevationIfRequired: promptElevation,
+                    profile: profile,
+                    explicitForegroundPid: fgPid,
+                    cancellationToken: cts.Token);
+
+                _lastMemResult = res;
+                SystemCommandsService.RefreshMemoryCommandSubtitles(_builtInCommands);
+
+                if (_currentMode == LauncherMode.MemoryReduct || _currentMode == LauncherMode.MainSearch)
+                {
+                    UpdateFilter();
+                }
+
+                string msg = res.FormatSummary();
+                StatusText.Text = msg;
+                ToastNotification.Show(res.ElevationCancelled
+                    ? "⚠ Administrator permission was declined (UAC cancelled)"
+                    : res.WasCancelled
+                        ? $"Cancelled • {msg}"
+                        : (res.WorkerTimedOut || res.TelemetryUnavailable)
+                            ? $"⚠ {msg}"
+                            : res.IsPartialSuccess
+                                ? $"ℹ {msg}"
+                                : $"✓ {msg}");
+            }
+            catch (OperationCanceledException)
+            {
+                StatusText.Text = "Memory operation cancelled";
+                ToastNotification.Show("Memory operation cancelled");
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Memory operation failed: {ex.Message}";
+                ToastNotification.Show($"Memory operation failed: {ex.Message}");
+            }
+            finally
+            {
+                if (_memReductCts == cts) _memReductCts = null;
+                cts.Dispose();
+                _isMemOperationRunning = false;
+            }
+        }
+
+        private async Task TrimProcessGroupAsync(string processName)
+        {
+            if (_isMemOperationRunning) return;
+            _isMemOperationRunning = true;
+            try
+            {
+                StatusText.Text = $"Trimming working set for {processName}...";
+                var res = await Task.Run(() => MemoryReductService.TrimProcessGroup(processName));
+                _lastMemResult = res;
+                SystemCommandsService.RefreshMemoryCommandSubtitles(_builtInCommands);
+
+                if (_currentMode == LauncherMode.MemoryReduct)
+                {
+                    UpdateFilter();
+                }
+
+                string summary = !string.IsNullOrEmpty(res.StatusSummary) ? res.StatusSummary : res.FormatSummary();
+                StatusText.Text = summary;
+                ToastNotification.Show(res.ProcessesCleaned > 0
+                    ? $"✓ {processName}: {res.WorkingSetTrimmedMb:N1} MB working set trimmed ({res.ProcessesCleaned} procs)"
+                    : $"ℹ {summary}");
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Trim failed: {ex.Message}";
+            }
+            finally
+            {
+                _isMemOperationRunning = false;
+            }
+        }
+
+        private void ToggleProcessExclusion(string processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName)) return;
+            _settings.MemReductExcludedProcesses ??= new List<string>();
+            int existingIdx = _settings.MemReductExcludedProcesses
+                .FindIndex(x => string.Equals(x, processName, StringComparison.OrdinalIgnoreCase));
+
+            if (existingIdx >= 0)
+            {
+                _settings.MemReductExcludedProcesses.RemoveAt(existingIdx);
+                ToastNotification.Show($"✓ Included '{processName}' in Smart Reclaim");
+            }
+            else
+            {
+                _settings.MemReductExcludedProcesses.Add(processName);
+                ToastNotification.Show($"✓ Excluded '{processName}' from Smart Reclaim");
+            }
+
+            _settings.Save(notify: false);
+            if (_currentMode == LauncherMode.MemoryReduct)
+            {
+                UpdateFilter();
+            }
+        }
+
+        private void UpdateMemoryStudioFilter(string query)
+        {
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
+            SectionHeaderText.Text = "Memory Reduct Studio (Enter on App: Trim RAM • Ctrl+K: Exclude • Esc: Cancel/Back)";
+
+            int fgPid = DwmApi.GetWindowProcessId(GlobalKeyboardHook.LastActiveWindow);
+            Task.Run(() =>
+            {
+                if (token.IsCancellationRequested) return;
+                var stats = MemoryReductService.GetDetailedMemoryStats();
+                var groups = MemoryReductService.GetProcessGroupsSnapshot(query, fgPid);
+                bool isElevated = MemoryReductService.IsElevated;
+                if (token.IsCancellationRequested) return;
+
+                var iconTelemetry = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathActivity, asStroke: true);
+                var iconMem = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathMemory);
+                var iconShield = IconGenerator.GetSquircleIcon(SquircleTheme.AdminGold, IconGenerator.PathShield, asStroke: true);
+                var iconProc = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathCpu);
+                var iconFg = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathCpu);
+
+                var items = new List<LauncherItem>();
+
+                string lastInfo = _lastMemResult != null ? $" • Last: {_lastMemResult.FormatSummary()}" : string.Empty;
+                string standbyText = stats.HasKernelListMetrics ? $" • Standby: {stats.StandbyMb:N0} MB" : string.Empty;
+                items.Add(new LauncherItem
+                {
+                    Id = "mem:telemetry",
+                    Name = $"Physical RAM: {stats.LoadPercent}% ({stats.UsedPhysGb:F1} / {stats.TotalPhysGb:F1} GB) • Avail: {stats.AvailPhysGb:F1} GB",
+                    Subtitle = $"System Cache: {stats.SystemCacheMb:N0} MB{standbyText} • Commit: {stats.CommitTotalGb:F1}/{stats.CommitLimitGb:F1} GB{lastInfo}",
+                    Category = "Telemetry",
+                    ShortcutBadge = "Refresh ↵",
+                    Icon = iconTelemetry,
+                    KeepOpenOnExecute = true,
+                    Action = UpdateFilter
+                });
+
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    items.Add(new LauncherItem
+                    {
+                        Id = "mem:smart",
+                        Name = "Run Smart Reclaim (Recommended Default)",
+                        Subtitle = "Safely trims background apps (>=25 MB) • Protects active foreground window & Windows OS processes",
+                        Category = "Memory Action",
+                        ShortcutBadge = "Smart ↵",
+                        Icon = iconMem,
+                        KeepOpenOnExecute = true,
+                        Action = () => _ = RunMemoryCleanAsync(MemoryCleanProfile.SmartReclaim, false)
+                    });
+
+                    items.Add(new LauncherItem
+                    {
+                        Id = "mem:trim_all",
+                        Name = "Trim All User Working Sets",
+                        Subtitle = "Sweeps working sets across all accessible user processes (respects user exclusions, zero prompt)",
+                        Category = "Memory Action",
+                        ShortcutBadge = "Trim All",
+                        Icon = iconMem,
+                        KeepOpenOnExecute = true,
+                        Action = () => _ = RunMemoryCleanAsync(MemoryCleanProfile.WorkingSetsAll, false)
+                    });
+
+                    items.Add(new LauncherItem
+                    {
+                        Id = "mem:standby_low",
+                        Name = "Purge Low-Priority Standby List (Opt-In)",
+                        Subtitle = isElevated
+                            ? "Admin Active • Flushes low-priority Windows standby cache pages"
+                            : "Requires Admin UAC • Flushes low-priority standby cache pages",
+                        Category = "Kernel Opt-In",
+                        ShortcutBadge = "Admin 🛡",
+                        Icon = iconShield,
+                        KeepOpenOnExecute = true,
+                        Action = () => _ = RunMemoryCleanAsync(MemoryCleanProfile.LowPriorityStandbyOnly, true)
+                    });
+
+                    items.Add(new LauncherItem
+                    {
+                        Id = "mem:kernel_full",
+                        Name = "Deep Kernel Cache Purge (Admin Opt-In)",
+                        Subtitle = isElevated
+                            ? "Admin Active • System File Cache + Modified List + Standby Lists"
+                            : "Requires Admin UAC • Full NT kernel cache & standby purge",
+                        Category = "Kernel Opt-In",
+                        ShortcutBadge = "Kernel 🛡",
+                        Icon = iconShield,
+                        KeepOpenOnExecute = true,
+                        Action = () => _ = RunMemoryCleanAsync(MemoryCleanProfile.FullKernelAndWorkingSets, true)
+                    });
+                }
+
+                foreach (var g in groups.Take(45))
+                {
+                    double wsMb = g.TotalWorkingSetBytes / (1024.0 * 1024.0);
+                    string role = g.IsProtectedSystem
+                        ? "Protected System Process (Skipped by Smart Reclaim)"
+                        : g.IsExcludedByUser
+                            ? "Excluded by User (Ctrl+K to Re-include)"
+                            : g.IsForeground
+                                ? "Active Foreground App (Protected by Smart Reclaim; Enter trims manually)"
+                                : $"{g.ProcessCount} process(es) • Enter trims working set without closing";
+
+                    string badge = g.IsProtectedSystem
+                        ? "Protected"
+                        : g.IsExcludedByUser
+                            ? "Excluded"
+                            : g.IsForeground
+                                ? "Active"
+                                : "Trim ↵";
+
+                    string procName = g.ProcessName;
+                    bool isProt = g.IsProtectedSystem;
+
+                    items.Add(new LauncherItem
+                    {
+                        Id = "memgrp:" + procName,
+                        Name = $"{procName} ({g.ProcessCount})",
+                        Subtitle = role,
+                        Category = $"{wsMb:N0} MB",
+                        ShortcutBadge = badge,
+                        Icon = g.IsForeground ? iconFg : (g.IsProtectedSystem ? iconShield : iconProc),
+                        KeepOpenOnExecute = true,
+                        Action = () =>
+                        {
+                            if (isProt)
+                            {
+                                ToastNotification.Show($"Protected Windows system process '{procName}' cannot be trimmed");
+                                return;
+                            }
+                            _ = TrimProcessGroupAsync(procName);
+                        }
+                    });
+                }
+
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (token.IsCancellationRequested || _currentMode != LauncherMode.MemoryReduct) return;
+                    _currentItems = items;
+                    BindResults();
+                }, DispatcherPriority.Normal);
+            }, token);
+        }
+
+        private void UpdatePortInspectorFilter(string query)
+        {
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
+
+            int? filterPort = int.TryParse(query, out int p) && p > 0 && p <= 65535 ? p : null;
+            string? textFilter = filterPort.HasValue ? null : query;
+            SectionHeaderText.Text = _pendingPortKillPid.HasValue
+                ? $"⚠ Confirm Process Termination for PID {_pendingPortKillPid.Value} (Enter to Kill • Esc to Cancel)"
+                : "Active TCP/UDP Port Bindings (Safe Read-Only View • Enter prompts 2-step confirmation)";
+
+            Task.Run(() =>
+            {
+                if (token.IsCancellationRequested) return;
+                var bindings = PowerDeveloperToolsService.GetActivePortBindings(filterPort, textFilter);
+                if (token.IsCancellationRequested) return;
+
+                var iconPort = IconGenerator.GetSquircleIcon(SquircleTheme.WebCyan, IconGenerator.PathNetwork, asStroke: true);
+                var iconWarn = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathShield, asStroke: true);
+                var iconBack = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathRefresh);
+
+                var items = new List<LauncherItem>();
+
+                if (_pendingPortKillPid.HasValue)
+                {
+                    int targetPid = _pendingPortKillPid.Value;
+                    string targetLabel = _pendingPortKillLabel;
+                    items.Add(new LauncherItem
+                    {
+                        Id = $"port:confirm:{targetPid}",
+                        Name = $"⚠ Confirm Terminate {targetLabel} (PID {targetPid})",
+                        Subtitle = "Explicit confirmation required • Press Enter to terminate process now",
+                        Category = "Confirm Kill",
+                        ShortcutBadge = "Confirm ↵",
+                        Icon = iconWarn,
+                        KeepOpenOnExecute = true,
+                        Action = () =>
+                        {
+                            try
+                            {
+                                using var proc = System.Diagnostics.Process.GetProcessById(targetPid);
+                                string name = proc.ProcessName;
+                                proc.Kill();
+                                ToastNotification.Show($"✓ Terminated {name} (PID {targetPid})");
+                            }
+                            catch (Exception ex)
+                            {
+                                ToastNotification.Show($"Could not terminate PID {targetPid}: {ex.Message}");
+                            }
+                            finally
+                            {
+                                _pendingPortKillPid = null;
+                                _pendingPortKillLabel = string.Empty;
+                                UpdateFilter();
+                            }
+                        }
+                    });
+
+                    items.Add(new LauncherItem
+                    {
+                        Id = "port:cancel_kill",
+                        Name = "Cancel Termination",
+                        Subtitle = "Keep process running and return to port list",
+                        Category = "Safe Action",
+                        ShortcutBadge = "Esc",
+                        Icon = iconBack,
+                        KeepOpenOnExecute = true,
+                        Action = () =>
+                        {
+                            _pendingPortKillPid = null;
+                            _pendingPortKillLabel = string.Empty;
+                            UpdateFilter();
+                        }
+                    });
+                }
+
+                foreach (var b in bindings.Take(60))
+                {
+                    var binding = b;
+                    bool isProt = MemoryReductService.IsProcessProtected(binding.ProcessName, binding.Pid);
+                    items.Add(new LauncherItem
+                    {
+                        Id = $"port:{binding.Protocol}:{binding.LocalPort}:{binding.Pid}",
+                        Name = $"{binding.Protocol} :{binding.LocalPort} → {binding.ProcessName} (PID {binding.Pid})",
+                        Subtitle = $"{binding.LocalAddress}:{binding.LocalPort} [{binding.State}]" +
+                                   (string.IsNullOrEmpty(binding.ExecutablePath) ? "" : $" • {binding.ExecutablePath}"),
+                        Category = isProt ? "System Port" : "Port Binding",
+                        ShortcutBadge = isProt ? "Protected" : "Manage ↵",
+                        Icon = iconPort,
+                        Path = binding.ExecutablePath,
+                        KeepOpenOnExecute = true,
+                        Action = () =>
+                        {
+                            if (isProt)
+                            {
+                                System.Windows.Clipboard.SetText($"{binding.Protocol} {binding.LocalAddress}:{binding.LocalPort} PID {binding.Pid} ({binding.ProcessName})");
+                                ToastNotification.Show($"Protected OS process ({binding.ProcessName}) • Copied endpoint info");
+                                return;
+                            }
+
+                            _pendingPortKillPid = binding.Pid;
+                            _pendingPortKillLabel = $"{binding.ProcessName} ({binding.Protocol} :{binding.LocalPort})";
+                            UpdateFilter();
+                        }
+                    });
+                }
+
+                if (items.Count == 0)
+                {
+                    items.Add(new LauncherItem
+                    {
+                        Id = "port:empty",
+                        Name = "No matching TCP/UDP port bindings found",
+                        Subtitle = "Press Esc to return to Main Search",
+                        Category = "Port Inspector",
+                        Icon = iconPort,
+                        KeepOpenOnExecute = true,
+                        Action = () => SwitchMode(LauncherMode.MainSearch)
+                    });
+                }
+
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (token.IsCancellationRequested || _currentMode != LauncherMode.PortInspector) return;
+                    _currentItems = items;
+                    BindResults();
+                }, DispatcherPriority.Normal);
+            }, token);
+        }
+
+        private void UpdateTempCleanupPreviewFilter(string query)
+        {
+            if (_pendingTempPreview == null)
+            {
+                SectionHeaderText.Text = "Scanning %TEMP% and CrashDumps (>24h stale, unlocked)...";
+                _currentItems = new List<LauncherItem>
+                {
+                    new()
+                    {
+                        Id = "temp:scanning",
+                        Name = "Scanning temporary directories (read-only preview)...",
+                        Subtitle = "No files will be deleted until you review and explicitly confirm",
+                        Category = "Temp Cleanup",
+                        Icon = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathTrash),
+                        KeepOpenOnExecute = true
+                    }
+                };
+                BindResults();
+
+                Task.Run(() =>
+                {
+                    var preview = PowerDeveloperToolsService.ScanStaleTempFilesPreview();
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (_currentMode != LauncherMode.TempCleanupPreview) return;
+                        _pendingTempPreview = preview;
+                        UpdateTempCleanupPreviewFilter(SearchBox.Text.Trim());
+                    });
+                });
+                return;
+            }
+
+            var previewData = _pendingTempPreview;
+            var iconTrash = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathTrash);
+            var iconBack = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathRefresh);
+            var iconFile = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathFolderOpen);
+
+            var items = new List<LauncherItem>();
+            double totalMb = previewData.TotalBytes / (1024.0 * 1024.0);
+            SectionHeaderText.Text = previewData.Files.Count > 0
+                ? $"Preview: {previewData.Files.Count} stale file(s) ({totalMb:N1} MB) • Confirm before deletion"
+                : "Temp Cleanup Preview: 0 eligible stale files";
+
+            if (previewData.Files.Count == 0)
+            {
+                items.Add(new LauncherItem
+                {
+                    Id = "temp:none",
+                    Name = "✓ No stale temporary files found (>24h unlocked)",
+                    Subtitle = $"Skipped {previewData.SkippedRecentOrLocked} active/recent file(s) • Press Enter or Esc to return",
+                    Category = "Temp Cleanup",
+                    Icon = iconBack,
+                    KeepOpenOnExecute = true,
+                    Action = () => SwitchMode(LauncherMode.MainSearch)
+                });
+            }
+            else
+            {
+                items.Add(new LauncherItem
+                {
+                    Id = "temp:confirm_delete",
+                    Name = $"⚠ Confirm Delete {previewData.Files.Count} Stale Temp File(s) ({totalMb:N1} MB)",
+                    Subtitle = $"Older than 24h & unlocked ({previewData.SkippedRecentOrLocked} recent/locked files skipped) • Enter deletes permanently",
+                    Category = "Confirm Cleanup",
+                    ShortcutBadge = "Confirm ↵",
+                    Icon = iconTrash,
+                    KeepOpenOnExecute = true,
+                    Action = () =>
+                    {
+                        Task.Run(() =>
+                        {
+                            var outcome = PowerDeveloperToolsService.ExecuteTempFilesCleanup(previewData);
+                            double freedMb = outcome.FreedBytes / (1024.0 * 1024.0);
+                            Dispatcher.Invoke(() =>
+                            {
+                                _pendingTempPreview = null;
+                                ToastNotification.Show($"✓ Temp Cleanup: Freed {freedMb:N1} MB ({outcome.DeletedCount} deleted, {outcome.FailedCount} skipped)");
+                                SwitchMode(LauncherMode.MainSearch);
+                            });
+                        });
+                    }
+                });
+
+                items.Add(new LauncherItem
+                {
+                    Id = "temp:cancel",
+                    Name = "Cancel Cleanup (Keep All Files)",
+                    Subtitle = "Return to Main Search without deleting any files",
+                    Category = "Safe Action",
+                    ShortcutBadge = "Esc",
+                    Icon = iconBack,
+                    KeepOpenOnExecute = true,
+                    Action = () => SwitchMode(LauncherMode.MainSearch)
+                });
+
+                IEnumerable<TempFileCandidate> files = previewData.Files;
+                if (!string.IsNullOrWhiteSpace(query))
+                {
+                    files = files.Where(f => f.FullPath.Contains(query, StringComparison.OrdinalIgnoreCase));
+                }
+
+                foreach (var f in files.OrderByDescending(x => x.SizeBytes).Take(50))
+                {
+                    double kb = f.SizeBytes / 1024.0;
+                    string sizeText = kb >= 1024 ? $"{kb / 1024.0:N1} MB" : $"{kb:N0} KB";
+                    items.Add(new LauncherItem
+                    {
+                        Id = "temp:preview:" + f.FullPath,
+                        Name = Path.GetFileName(f.FullPath),
+                        Subtitle = $"{f.FullPath} • Modified {f.LastWriteUtc.ToLocalTime():yyyy-MM-dd HH:mm}",
+                        Category = sizeText,
+                        Icon = iconFile,
+                        Path = f.FullPath,
+                        KeepOpenOnExecute = true
+                    });
+                }
+            }
+
+            _currentItems = items;
+            BindResults();
+        }
+
+        private void UpdateHungAppsPreviewFilter(string query)
+        {
+            if (_pendingHungPreview == null)
+            {
+                SectionHeaderText.Text = "Scanning top-level windows for unresponsive apps...";
+                _currentItems = new List<LauncherItem>
+                {
+                    new()
+                    {
+                        Id = "hung:scanning",
+                        Name = "Scanning for frozen / Not Responding windows...",
+                        Subtitle = "No processes will be terminated until you review and confirm",
+                        Category = "Process Health",
+                        Icon = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathCpu),
+                        KeepOpenOnExecute = true
+                    }
+                };
+                BindResults();
+
+                Task.Run(() =>
+                {
+                    var hung = PowerDeveloperToolsService.ScanUnresponsiveWindows();
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (_currentMode != LauncherMode.HungAppsPreview) return;
+                        _pendingHungPreview = hung;
+                        UpdateHungAppsPreviewFilter(SearchBox.Text.Trim());
+                    });
+                });
+                return;
+            }
+
+            var list = _pendingHungPreview;
+            var iconProc = IconGenerator.GetSquircleIcon(SquircleTheme.ProcessRose, IconGenerator.PathCpu);
+            var iconBack = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathRefresh);
+
+            var items = new List<LauncherItem>();
+            if (list.Count == 0)
+            {
+                SectionHeaderText.Text = "Process Health: All applications are responsive";
+                items.Add(new LauncherItem
+                {
+                    Id = "hung:none",
+                    Name = "✓ All running applications are responsive (0 hung windows)",
+                    Subtitle = "Press Enter or Esc to return to Main Search",
+                    Category = "Process Health",
+                    Icon = iconBack,
+                    KeepOpenOnExecute = true,
+                    Action = () => SwitchMode(LauncherMode.MainSearch)
+                });
+            }
+            else
+            {
+                SectionHeaderText.Text = $"Preview: {list.Count} unresponsive window(s) detected";
+                items.Add(new LauncherItem
+                {
+                    Id = "hung:confirm_all",
+                    Name = $"⚠ Confirm Terminate All {list.Count} Unresponsive App(s)",
+                    Subtitle = "Press Enter to terminate all listed hung processes • Press Esc to cancel",
+                    Category = "Confirm Kill",
+                    ShortcutBadge = "Confirm ↵",
+                    Icon = iconProc,
+                    KeepOpenOnExecute = true,
+                    Action = () =>
+                    {
+                        int killed = 0;
+                        foreach (var h in list)
+                        {
+                            try
+                            {
+                                using var proc = System.Diagnostics.Process.GetProcessById(h.Pid);
+                                proc.Kill();
+                                killed++;
+                            }
+                            catch { }
+                        }
+                        ToastNotification.Show($"✓ Terminated {killed}/{list.Count} unresponsive app(s)");
+                        _pendingHungPreview = null;
+                        UpdateHungAppsPreviewFilter(string.Empty);
+                    }
+                });
+
+                items.Add(new LauncherItem
+                {
+                    Id = "hung:cancel",
+                    Name = "Cancel (Leave Processes Running)",
+                    Subtitle = "Return to Main Search",
+                    Category = "Safe Action",
+                    ShortcutBadge = "Esc",
+                    Icon = iconBack,
+                    KeepOpenOnExecute = true,
+                    Action = () => SwitchMode(LauncherMode.MainSearch)
+                });
+
+                foreach (var h in list)
+                {
+                    var hungItem = h;
+                    if (!string.IsNullOrWhiteSpace(query) &&
+                        !hungItem.ProcessName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                        !hungItem.WindowTitle.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    items.Add(new LauncherItem
+                    {
+                        Id = "hung:pid:" + hungItem.Pid,
+                        Name = $"{hungItem.ProcessName} (PID {hungItem.Pid})",
+                        Subtitle = $"Unresponsive window: \"{hungItem.WindowTitle}\" • Enter terminates only this app",
+                        Category = "Not Responding",
+                        ShortcutBadge = "Kill ↵",
+                        Icon = iconProc,
+                        KeepOpenOnExecute = true,
+                        Action = () =>
+                        {
+                            try
+                            {
+                                using var proc = System.Diagnostics.Process.GetProcessById(hungItem.Pid);
+                                proc.Kill();
+                                ToastNotification.Show($"✓ Terminated {hungItem.ProcessName} (PID {hungItem.Pid})");
+                            }
+                            catch (Exception ex)
+                            {
+                                ToastNotification.Show($"Could not terminate {hungItem.ProcessName}: {ex.Message}");
+                            }
+                            _pendingHungPreview = null;
+                            UpdateHungAppsPreviewFilter(string.Empty);
+                        }
+                    });
+                }
+            }
+
+            _currentItems = items;
+            BindResults();
+        }
+
         private void BindResults()
         {
             ResultsList.ItemsSource = _currentItems;
@@ -751,13 +1567,17 @@ namespace Beam
                 StatusText.Text = $"{item.Name} • {item.Category}";
                 PrimaryActionLabel.Text = item.Category switch
                 {
-                    "Calculator" or "Hasher" or "Timestamp" or "Timestamp Converter" or "Base64 Encoder" or "Base64 Decoder" or "GUID Generator" => "Copy Result",
+                    "Calculator" or "Hasher" or "Timestamp" or "Timestamp Converter" or "Base64 Encoder" or "Base64 Decoder" or "GUID Generator" or "ID Generator" or "Password Generator" or "URL Encoder" or "URL Decoder" or "Color Converter" or "JWT (Unverified)" => "Copy Result",
                     "Clipboard" or "Pinned Clip" => "Paste to App",
                     "Window Management" => "Snap Window",
                     "PowerToys" => item.Name.Contains("Color") ? "Pick Color" : (item.Name.Contains("Text") ? "Snip OCR" : "Run"),
-                    "System Tool" => item.Name.Contains("Mem") ? "Free RAM" : "Run",
+                    "System Tool" => item.Id == "cmd:memreduct_studio" ? "Open Studio" : (item.Name.Contains("Mem") || item.Name.Contains("Reclaim") ? "Free RAM" : "Run"),
+                    "Port Binding" or "Port Inspector" => "Inspect",
+                    "Confirm Kill" => "Confirm Kill",
+                    "Confirm Cleanup" => "Confirm Delete",
                     "AI Command" or "Gemini AI" => "Open Gemini",
                     _ when item.Id.StartsWith("proc:") => "Kill Process",
+                    _ when item.Id.StartsWith("memgrp:") => "Trim App RAM",
                     _ => "Open"
                 };
             }
@@ -877,10 +1697,39 @@ namespace Beam
                 return;
             }
 
+            if (_settings.EnableMemReduct &&
+                e.Key == Key.M && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                SwitchMode(LauncherMode.MemoryReduct);
+                return;
+            }
+
+            if (_settings.EnablePowerTools &&
+                e.Key == Key.P && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                OpenPortInspector(string.Empty);
+                return;
+            }
+
             // 5. Standard Navigation
             if (e.Key == Key.Escape)
             {
                 e.Handled = true;
+                if (_memReductCts != null && !_memReductCts.IsCancellationRequested)
+                {
+                    _memReductCts.Cancel();
+                    StatusText.Text = "Cancelling memory operation...";
+                    return;
+                }
+                if (_currentMode == LauncherMode.PortInspector && _pendingPortKillPid.HasValue)
+                {
+                    _pendingPortKillPid = null;
+                    _pendingPortKillLabel = string.Empty;
+                    UpdateFilter();
+                    return;
+                }
                 if (!string.IsNullOrEmpty(SearchBox.Text))
                 {
                     SearchBox.Text = string.Empty;
@@ -1088,6 +1937,40 @@ namespace Beam
                 });
             }
 
+            if (item.Id.StartsWith("memgrp:", StringComparison.OrdinalIgnoreCase))
+            {
+                string procName = item.Id["memgrp:".Length..];
+                bool isProtected = MemoryReductService.IsProcessProtected(procName, 100);
+                if (!isProtected)
+                {
+                    bool isExcluded = MemoryReductService.IsProcessExcludedByUser(procName);
+                    actions.Add(new ActionItem
+                    {
+                        Title = isExcluded
+                            ? $"Include \"{procName}\" in Smart Reclaim"
+                            : $"Exclude \"{procName}\" from Smart Reclaim",
+                        ShortcutHint = "",
+                        Icon = iconAdmin,
+                        Execute = () => ToggleProcessExclusion(procName)
+                    });
+                }
+            }
+
+            if (item.Id.StartsWith("port:", StringComparison.OrdinalIgnoreCase))
+            {
+                actions.Add(new ActionItem
+                {
+                    Title = "Copy Port & PID Diagnostic Info",
+                    ShortcutHint = "",
+                    Icon = iconCopy,
+                    Execute = () =>
+                    {
+                        System.Windows.Clipboard.SetText($"{item.Name} • {item.Subtitle}");
+                        ToastNotification.Show("✓ Copied Port Info to Clipboard");
+                    }
+                });
+            }
+
             if (!string.IsNullOrEmpty(item.Path))
             {
                 actions.Add(new ActionItem
@@ -1227,6 +2110,9 @@ namespace Beam
             ChkEnableProcessKiller.IsChecked = _settings.EnableProcessKiller;
             ChkEnableSystemCmds.IsChecked = _settings.EnableSystemCommands;
             ChkEnableWebFallbacks.IsChecked = _settings.EnableWebFallbacks;
+            ChkEnableMemReduct.IsChecked = _settings.EnableMemReduct;
+            ChkAutoMemReduct.IsChecked = _settings.AutoMemReductEnabled;
+            ChkEnablePowerTools.IsChecked = _settings.EnablePowerTools;
 
             // Tab 3: AI Configuration
             TxtCloudUrl.Text = _settings.CloudBackendUrl;
@@ -1358,6 +2244,9 @@ namespace Beam
             _settings.EnableProcessKiller = ChkEnableProcessKiller.IsChecked == true;
             _settings.EnableSystemCommands = ChkEnableSystemCmds.IsChecked == true;
             _settings.EnableWebFallbacks = ChkEnableWebFallbacks.IsChecked == true;
+            _settings.EnableMemReduct = ChkEnableMemReduct.IsChecked == true;
+            _settings.AutoMemReductEnabled = ChkAutoMemReduct.IsChecked == true;
+            _settings.EnablePowerTools = ChkEnablePowerTools.IsChecked == true;
 
             _settings.CloudBackendUrl = string.IsNullOrWhiteSpace(TxtCloudUrl.Text) ? "http://localhost:8080" : TxtCloudUrl.Text.Trim();
             _settings.DefaultAiModel = TxtAiModel.Text.Trim();

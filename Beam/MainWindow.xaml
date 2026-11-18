@@ -871,13 +871,43 @@
                                 </Grid>
                             </Border>
 
-                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10">
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
                                         <TextBlock Text="Web Search Fallbacks" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
                                         <TextBlock Text="Quick web search options for Google, YouTube, and GitHub" Foreground="#6B7280" FontSize="11.5" />
                                     </StackPanel>
                                     <CheckBox x:Name="ChkEnableWebFallbacks" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
+                                </Grid>
+                            </Border>
+
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
+                                <Grid>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
+                                        <TextBlock Text="Memory Reduct Engine" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Safe Smart Reclaim working-set optimizer, Memory Reduct Studio (Ctrl+M), and optional kernel purge" Foreground="#6B7280" FontSize="11.5" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ChkEnableMemReduct" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
+                                </Grid>
+                            </Border>
+
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10" Margin="0,0,0,6">
+                                <Grid>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
+                                        <TextBlock Text="Auto Memory Reduct (Sustained Pressure)" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Automatically run Smart Reclaim only after 30s+ of sustained high RAM pressure with cooldowns" Foreground="#6B7280" FontSize="11.5" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ChkAutoMemReduct" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
+                                </Grid>
+                            </Border>
+
+                            <Border Background="#151821" BorderBrush="#222735" BorderThickness="1" CornerRadius="8" Padding="16,10">
+                                <Grid>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,60,0">
+                                        <TextBlock Text="PowerToys &amp; Developer Utilities" Foreground="#F3F4F6" FontSize="13" FontWeight="Medium" />
+                                        <TextBlock Text="Color Picker, Screen OCR, Awake, Port Inspector (Ctrl+P), JWT/Color/Hash/Timer evaluators" Foreground="#6B7280" FontSize="11.5" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ChkEnablePowerTools" Style="{StaticResource RaycastSwitchStyle}" HorizontalAlignment="Right" Click="SettingToggle_Changed" />
                                 </Grid>
                             </Border>
                         </StackPanel>
