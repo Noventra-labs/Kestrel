@@ -3,24 +3,25 @@
 </p>
 
 <p align="center">
-  <strong>The ultra-fast, minimalist command bar for Windows 11.</strong><br />
-  Instant app search, clipboard history, one-click RAM cleaner, AI assistant, and desktop tools in a beautiful native bar.
+  <strong>Native command bar and productivity omnibar for Windows.</strong><br />
+  Instant app search, clipboard history, kernel-level RAM cleaner, AI orchestration, and desktop utilities in a native Win32/DWM shell.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Noventra-Labs/Kestrel/releases/tag/v2.3.1"><img src="https://img.shields.io/badge/Download-v2.3.1-ff4444?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Version 2.3.1" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge" alt="MIT License" /></a>
-  <img src="https://img.shields.io/badge/Telemetry-Zero-blue?style=for-the-badge" alt="Zero Telemetry" />
-  <img src="https://img.shields.io/badge/Idle%20RAM-48%20MB-purple?style=for-the-badge" alt="48 MB Idle RAM" />
+  <a href="https://github.com/Noventra-Labs/Kestrel/releases/tag/v2.3.1"><img src="https://img.shields.io/badge/Release-v2.3.1-ff4444?style=flat-square" alt="Version 2.3.1" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10b981?style=flat-square" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/Platform-Windows%2011%20%7C%20Windows%2010%20(x64)-0078d4?style=flat-square" alt="Windows 11 / 10" />
+  <img src="https://img.shields.io/badge/Telemetry-Zero-10b981?style=flat-square" alt="Zero Telemetry" />
+  <img src="https://img.shields.io/badge/Idle%20RAM-48%20MB-blue?style=flat-square" alt="48 MB Idle RAM" />
 </p>
 
 ---
 
-## ⚡ What is Kestrel?
+## Overview
 
-**Kestrel** is a fast, lightweight command bar designed specifically for Windows 11 and Windows 10. 
+Kestrel is an ultra-fast, native command bar engineered for Windows 11 and Windows 10. 
 
-Instead of waiting for sluggish Windows Start Menu searches, web ads, or juggling 5 different background utilities, Kestrel puts everything you need into one clean omnibar. Tap your **`Win`** key or press **`Alt` + `Space`**, type what you want, and hit **`Enter`**.
+Designed for keyboard-driven navigation, Kestrel eliminates the latency, web advertisements, and inconsistent indexing of the standard Windows Start Menu. A single keystroke summons an omnibar capable of launching applications, recovering gigabytes of cached standby memory, retrieving past clipboard entries, capturing screen text via optical character recognition, and orchestrating desktop AI models.
 
 <p align="center">
   <img src="assets/kestrel-command-bar.png" alt="Kestrel Command Bar Interface" width="680" />
@@ -28,168 +29,159 @@ Instead of waiting for sluggish Windows Start Menu searches, web ads, or jugglin
 
 ---
 
-## 📥 Download Kestrel
+## Download
 
-Choose the edition that best fits how you work:
-
-| Edition | Size | What's Included | Download |
+| Edition | Package Size | Target Environment | Direct Download |
 | :--- | :--- | :--- | :--- |
-| **Windows Installer** (`Kestrel-Setup.exe`) | **~27.8 MB** | **Recommended.** Guided setup wizard, automatic updates, Start Menu & Desktop shortcuts, optional auto-start with Windows, and clean uninstaller in Windows Settings. | [⬇️ **Download Installer (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.3.1/Kestrel-Setup.exe) |
-| **Portable Edition** (`Kestrel.exe`) | **~26.6 MB** | Single standalone `.exe`. No installation required — run directly from your Downloads folder, desktop, or a USB thumb drive without modifying Windows system files. | [📦 **Download Portable (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.3.1/Kestrel.exe) |
-
-> [!NOTE]
-> All releases, release notes, and file checksums are available on the [**Official GitHub Releases Page**](https://github.com/Noventra-Labs/Kestrel/releases).
+| **Windows Installer** (`Kestrel-Setup.exe`) | **~27.8 MB** | Recommended for primary workstations. Provides a guided setup wizard, Start Menu and Desktop shortcuts, optional startup on boot, and clean Windows Add/Remove Programs registration. | [**Download Installer (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.3.1/Kestrel-Setup.exe) |
+| **Portable Executable** (`Kestrel.exe`) | **~26.6 MB** | Self-contained single binary. Requires no installation or registry modifications. Runs directly from any directory or removable drive. | [**Download Portable (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.3.1/Kestrel.exe) |
 
 ### System Requirements
-- **Operating System:** Windows 11 (all versions: 21H2, 22H2, 23H2, 24H2) or Windows 10 (22H2+) 64-bit (`x64`).
-- **Dependencies:** None! Everything is bundled inside the executable — no need to install .NET or extra frameworks.
-- **Permissions:** Standard user mode works for search and tools; Administrator privileges enable deep kernel memory cleanup and single Windows Key interception.
+- **Operating System:** Windows 11 (21H2, 22H2, 23H2, 24H2) or Windows 10 (22H2+) 64-bit (`x64`).
+- **Dependencies:** Self-contained executable. No external runtimes or framework installations are required.
+- **Permissions:** Runs under standard user rights for application launching and utilities. Administrator privileges are recommended for NT kernel memory list purging and single Windows Key defusal.
 
 ---
 
-## 🚀 Getting Started in 30 Seconds
+## Getting Started
 
-1. **Download & Launch:** Run `Kestrel-Setup.exe` (or open the portable `Kestrel.exe`).
-2. **Summon the Bar:** Tap your **`Win`** key or press **`Alt` + `Space`** from any screen or app.
-3. **Type & Execute:**
-   - Type an app name (e.g. `code`, `chrome`, `spotify`) and press <kbd>Enter</kbd> to launch.
-   - Type `ram` and press <kbd>Enter</kbd> to instantly free gigabytes of locked system memory.
-   - Type `clip` to view and paste recent copied text, links, or colors.
-   - Type `ai` to ask Gemini, ChatGPT, or Claude a question without opening your browser.
-4. **Dismiss:** Press <kbd>Esc</kbd> whenever you want to close the bar.
+1. **Launch:** Run `Kestrel-Setup.exe` or execute the portable `Kestrel.exe`.
+2. **Summon:** Press <kbd>Win</kbd> (single tap) or <kbd>Alt</kbd> + <kbd>Space</kbd> from any application.
+3. **Execute:**
+   - Type an application or tool name (e.g. `code`, `terminal`, `calc`) and press <kbd>Enter</kbd> to launch.
+   - Type `ram` and press <kbd>Enter</kbd> to purge kernel standby lists and reclaim locked memory.
+   - Type `clip` to browse and restore encrypted clipboard history entries.
+   - Type `ai` to query language models directly from the prompt.
+4. **Dismiss:** Press <kbd>Esc</kbd> to dismiss the command bar.
 
 ---
 
-## ✨ Features You’ll Use Every Day
+## Features
 
 <p align="center">
-  <img src="assets/kestrel-preview.png" alt="Kestrel Features Overview" width="480" />
+  <img src="assets/kestrel-preview.png" alt="Kestrel Capabilities and Overview" width="480" />
 </p>
 
-### 🔍 Instant App & File Search
-- **Zero Input Lag:** Results appear under 5 milliseconds — before your finger even lifts from the key.
-- **Fuzzy Search:** You don't need exact spelling. Type `ps` for PowerShell, `term` for Windows Terminal, or `calc` for Calculator.
-- **No Sponsored Junk:** Pure local search with zero Bing web search suggestions, trending news, or web advertisements.
+### Instant Application and File Search
+- **Low-Latency Indexing:** Queries execute in under 5 milliseconds with direct memory traversal.
+- **Fuzzy Search Algorithm:** Tolerates imprecise typing and abbreviations (e.g. `ps` for PowerShell, `term` for Windows Terminal).
+- **Ad-Free Execution:** Traverses purely local binaries, Control Panel applets, and system utilities without web searches or sponsored suggestions.
 
-### 🧹 1-Click Memory Cleaner (RAM Reduct)
-- Windows often leaves gigabytes of closed apps lingering in the Standby memory cache.
-- Kestrel directly frees cached and standby memory with one tap, instantly returning RAM to heavy games, IDEs, or video editors without rebooting.
+### Kernel Standby RAM Purge (Memory Reduct)
+- **Direct NT Syscalls:** Invokes `NtSetSystemInformation` to clear system working sets and purge standby page lists on demand.
+- **Immediate Memory Recovery:** Reclaims gigabytes of locked physical memory without requiring a system restart.
+- **Live Memory Telemetry:** Displays real-time physical memory allocation (Active, Standby, Free) directly within the interface.
 
-### 📋 Encrypted Clipboard History
-- Never lose a copied snippet, password token, link, or image URL again.
-- Filter through your past clipboard items and paste them back in either formatted or clean plain text.
-- Secured and encrypted locally on your computer with Windows DPAPI.
+### Encrypted Clipboard History Vault
+- **Automatic Caching:** Captures copied text strings, hyperlinks, code snippets, and color codes.
+- **Local Cryptographic Protection:** Encrypted at rest via the Windows Data Protection API (DPAPI) tied to the current user token.
+- **Flexible Pasting:** Allows restoration in original formatted state or sanitized plain text.
 
-### 🤖 Desktop AI Assistant
-- Chat directly with AI models (**Google Gemini**, **OpenAI ChatGPT**, or **Anthropic Claude**) straight from the command bar.
-- Write a quick email draft, ask for a regex pattern, convert code, or ask questions without switching away from your current workspace.
+### Desktop AI Assistant
+- **Integrated Query Bar:** Supports Google Gemini, Anthropic Claude, and OpenAI GPT models directly from the command palette.
+- **Workspace Continuity:** Draft shell scripts, summarize technical documentation, or format structured data without navigating away from the active task.
 
-### 🎯 Screen Text Extractor (OCR)
-- Need to copy text from an image, YouTube video, Zoom presentation, or an unselectable Windows error dialog?
-- Trigger the **Text Extractor**, drag a box over any part of your screen, and the text is instantly copied to your clipboard.
+### Screen OCR and Precision Color Eyedropper
+- **Text Extractor (OCR):** Select any screen rectangle to extract unselectable text from video streams, image assets, or system dialogs.
+- **Color Eyedropper:** Pixel-accurate screen sampler with interactive magnification loupe. Exports values in HEX (`#ff6363`), RGB, and OKLCH formats.
 
-### 🎨 Precision Color Eyedropper
-- Click the eyedropper, hover over any pixel on your monitor with a live zoom magnifier, and click to grab the exact color.
-- Automatically copies the color in **HEX** (`#ff6363`), **RGB**, or **OKLCH**.
+### Developer Utilities
+- **UUID / GUID Generation:** Instantly outputs valid RFC 4122 v4 identifiers.
+- **Base64 Processing:** Fast encoding and decoding of UTF-8 strings.
+- **JSON Validation and Prettification:** Formats unformatted payloads and flags syntax errors.
+- **Unix Epoch Conversion:** Real-time bi-directional conversion between Unix timestamps and ISO 8601 strings.
+- **Cryptographic Hashes:** Generates MD5, SHA-1, SHA-256, and SHA-512 digests.
 
-### 🛠️ Everyday Quick Utilities
-- **UUID / GUID Generator:** Instantly generate clean unique IDs.
-- **Base64 Encoder & Decoder:** Fast text encoding without suspicious online converter websites.
-- **JSON Formatter:** Prettify and validate messy JSON strings.
-- **Epoch / Timestamp Converter:** Convert Unix timestamps to human-readable dates in real time.
-- **Hashes:** Generate MD5, SHA-1, and SHA-256 hashes on the fly.
-
-### 📌 Window Controls & Keep Awake
-- **Always on Top:** Pin reference documents, calculator windows, or video calls so they never get hidden behind other apps.
-- **Keep Awake:** Prevent your PC from sleeping or locking the screen during long downloads, renders, or presentations with a single switch.
+### Window Management and System State
+- **Always on Top:** Toggles the foreground window to remain pinned above other visual surfaces.
+- **Keep Awake:** Prevents display sleep and system idle states during long-running builds, file transfers, or presentations.
 
 ---
 
-## ⌨️ Keyboard Shortcuts Reference
+## Keyboard Shortcuts
 
-| Shortcut | Description |
+| Key Combination | Action |
 | :--- | :--- |
 | <kbd>Win</kbd> or <kbd>Alt</kbd> + <kbd>Space</kbd> | Summon or dismiss the Kestrel command bar |
-| <kbd>↑</kbd> / <kbd>↓</kbd> | Navigate up and down through search results |
-| <kbd>Enter</kbd> | Execute selected action, launch app, or copy item |
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd> | Launch selected app or terminal **as Administrator** |
-| <kbd>Esc</kbd> | Clear your search text, or close Kestrel if already empty |
-| <kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd> | Cycle through category tabs: `All`, `Apps`, `Utilities`, `Clipboard`, `AI`, `Developer` |
-| <kbd>Ctrl</kbd> + <kbd>,</kbd> | Open Kestrel Preferences & Settings |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Navigate vertically through search results |
+| <kbd>Enter</kbd> | Execute selected command, launch application, or copy result |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd> | Launch selected application or terminal **as Administrator** |
+| <kbd>Esc</kbd> | Clear current query, or dismiss Kestrel if query input is empty |
+| <kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd> | Cycle category filters (`All`, `Apps`, `Utilities`, `Clipboard`, `AI`, `Developer`) |
+| <kbd>Ctrl</kbd> + <kbd>,</kbd> | Open Kestrel Preferences and Configuration |
 
 ---
 
-## ⚙️ Customization & Settings
+## Configuration and Settings
 
-Open **Settings** by right-clicking the Kestrel bird icon in your Windows System Tray (bottom-right taskbar) or typing `settings` in Kestrel:
+Configuration options can be adjusted via the tray icon context menu or by entering `settings` into the omnibar:
 
-- **Summon Hotkey:** Choose between single **`Win`** key, **`Alt` + `Space`**, **`Ctrl` + `Space`**, or configure your own favorite key combo.
-- **Appearance:** Toggle between Windows 11 Acrylic frosted glass, Mica, or solid dark mode.
-- **Startup:** Toggle **Run on Windows Startup** to have Kestrel ready whenever you turn on your PC.
-- **AI Configuration:** Add your personal API key for Google Gemini, OpenAI, or Claude. Keys are stored safely in Windows Credential Manager.
+- **Summon Hotkey:** Toggle between the dedicated single <kbd>Win</kbd> key, <kbd>Alt</kbd> + <kbd>Space</kbd>, <kbd>Ctrl</kbd> + <kbd>Space</kbd>, or custom key combinations.
+- **Visual Backdrop:** Select between Windows 11 Acrylic frosted glass, Mica material, or solid dark mode.
+- **Startup Integration:** Enable or disable automatic launch on Windows startup.
+- **AI Credentials:** Securely store personal API keys for supported AI providers within the Windows Credential Manager.
 
 ---
 
-## 🏆 How Kestrel Compares
+## Comparison
 
-| Feature | Kestrel | Windows Start Menu | PowerToys Run | Other Launchers |
+| Metric / Capability | Kestrel | Windows Start Menu | PowerToys Run | Flow Launcher |
 | :--- | :---: | :---: | :---: | :---: |
-| **Search Speed** | **Instant (< 5ms)** | 400ms – 1200ms | ~280ms | 200ms – 500ms |
-| **Memory Usage** | **~48 MB** | Built-in Windows | ~320 MB | 250 MB – 500 MB+ |
-| **Memory Cleaner** | **Built-in (1-Click)** | ❌ No | ❌ No | ❌ No |
-| **Clipboard History** | **Built-in & Encrypted** | Basic (<kbd>Win</kbd>+<kbd>V</kbd>) | ❌ No | Plugins required |
-| **Web Ads & Sponsored Apps** | **Zero (Never)** | Yes (Bing / News) | No | Sometimes |
-| **Screen OCR & Eyedropper** | **Built-in** | ❌ No | Separate tools | ❌ No |
-| **Desktop AI Assistant** | **Built-in** | Web link only | ❌ No | Plugins required |
+| **Search Response Latency** | **< 5 ms** | 400 ms – 1200 ms | ~280 ms | ~200 ms |
+| **Idle Memory Footprint** | **~48 MB** | System Default | ~320 MB | ~210 MB |
+| **Kernel RAM Cleaner** | **Built-in** | No | No | No |
+| **Encrypted Clipboard Vault** | **Built-in (DPAPI)** | Basic (<kbd>Win</kbd>+<kbd>V</kbd>) | No | Plugin Dependent |
+| **Web Advertisements** | **Zero** | Yes (Bing / MSN) | No | No |
+| **Screen OCR and Eyedropper** | **Built-in** | No | Modular Utility | No |
+| **Native DWM Acrylic Composition** | **Built-in** | System Default | No | No |
+| **Telemetry and Tracking** | **Zero** | Active | Optional | Optional |
 
 ---
 
-## ❓ Frequently Asked Questions (FAQ)
+## Frequently Asked Questions
 
 <details>
-<summary><strong>Windows SmartScreen shows "Windows protected your PC". Is Kestrel safe?</strong></summary>
+<summary><strong>Windows SmartScreen displays "Windows protected your PC". How should this be handled?</strong></summary>
 
-**Yes, Kestrel is 100% safe, open-source, and free.**  
-Because Kestrel is an independent open-source project and newly released binaries do not yet have expensive corporate EV signing certificates, Windows SmartScreen may show an alert on first launch.  
-Simply click **More info** and then click **Run anyway**. You can review the entire public source code on GitHub.
+Kestrel is open-source software distributed without an enterprise EV code-signing certificate. Consequently, Windows SmartScreen may present an informational notice on initial launch. Select **More info** followed by **Run anyway**. Source code and reproducible build instructions are accessible for inspection within the repository.
 </details>
 
 <details>
-<summary><strong>Why does Kestrel benefit from Administrator privileges?</strong></summary>
+<summary><strong>Why are Administrator privileges recommended?</strong></summary>
 
-While Kestrel runs happily as a standard app, running as Administrator lets it:
-1. Intercept the single `Win` key cleanly without opening the default Windows Start Menu.
-2. Purge Standby memory lists at the Windows kernel level to free up locked RAM.
-3. Launch other apps as Administrator via <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd>.
+While core search and productivity functions operate normally under standard privileges, elevated permissions are required to:
+1. Purge kernel standby lists via the NT system call `NtSetSystemInformation`.
+2. Cleanly suppress the Windows 11 Start Menu when intercepting the standalone <kbd>Win</kbd> key.
+3. Execute external applications with elevated rights via <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd>.
 </details>
 
 <details>
-<summary><strong>Where does Kestrel run when I'm not using it?</strong></summary>
+<summary><strong>How does Kestrel behave when idle?</strong></summary>
 
-Kestrel stays quietly in your Windows System Tray (near the clock in your taskbar). It uses near-zero CPU and only ~48 MB of RAM when idle.
+Kestrel resides in the Windows System Tray notification area. It maintains a footprint of approximately 48 MB of RAM and consumes 0.0% CPU when not actively processing keystrokes.
 </details>
 
 <details>
-<summary><strong>How do I close or uninstall Kestrel?</strong></summary>
+<summary><strong>How do I exit or uninstall Kestrel?</strong></summary>
 
-- **To exit:** Right-click the Kestrel tray icon in the taskbar and click **Exit Kestrel**.
-- **To uninstall:** If you used the installer, go to **Windows Settings > Apps > Installed apps**, find **Kestrel**, and click **Uninstall**. If you used the portable version, just delete the `Kestrel.exe` file.
+- **Exit:** Right-click the Kestrel system tray icon and select **Exit Kestrel**.
+- **Uninstall:** For installer deployments, navigate to **Windows Settings > Apps > Installed apps**, locate **Kestrel**, and select **Uninstall**. For portable deployments, delete the `Kestrel.exe` binary.
 </details>
 
 ---
 
-## 🛡️ Privacy & Offline First
+## Privacy and Offline Architecture
 
-- **Zero Tracking:** No telemetry, analytics, user profiling, or background tracking.
-- **Offline First:** All search indexing, clipboard management, memory cleaning, and utilities run 100% locally on your computer without an internet connection.
-- **Your Data Stays Yours:** Internet connections only happen if you explicitly configure an AI assistant API key and ask a question.
+- **Zero Telemetry:** No user analytics, session metrics, or diagnostic pings are collected or transmitted.
+- **Local Operation:** Search indexing, clipboard records, memory purging, and utility calculations run locally without network access.
+- **Explicit Network Boundaries:** Network requests occur exclusively when the user configures an AI provider API key and explicitly submits a query.
 
 ---
 
-## 📄 License & Credits
+## License and Credits
 
-Developed with precision by [**Noventra-Labs**](https://github.com/Noventra-Labs).  
-Licensed under the open-source **[MIT License](LICENSE)**.
+Developed and maintained by [**Noventra-Labs**](https://github.com/Noventra-Labs).  
+Distributed under the **[MIT License](LICENSE)**.
 
 ---
 
