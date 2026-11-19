@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/kestrel-banner.jpg" alt="Kestrel — One command bar. All your tools." width="100%" />
+  <img src="assets/kestrel-banner.jpg" alt="Kestrel — Fast, keyboard-driven command bar for Windows" width="100%" />
 </p>
 
 <p align="center">
@@ -185,4 +185,4 @@ Distributed under the **MIT License**.
 
 ---
 
-**Kestrel — One command bar. All your tools.**
+**Kestrel — Fast, keyboard-driven command bar for Windows.**
