@@ -32,8 +32,8 @@ Pressing the <kbd>Win</kbd> key summons an omnibar for launching applications, s
 
 | Edition | Package Size | Target Environment | Direct Download |
 | :--- | :--- | :--- | :--- |
-| **Windows Installer** (`Kestrel-Setup.exe`) | **~167.0 MB** | Recommended for primary workstations. Provides a guided setup wizard, Start Menu and Desktop shortcuts, optional startup on boot, and Windows Add/Remove Programs registration. | [**Download Installer (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.0/Kestrel-Setup.exe) |
-| **Portable Executable** (`Kestrel.exe`) | **~95.0 MB** | Self-contained single binary. Runs directly from any directory or removable drive and supports in-app self-updates. | [**Download Portable (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.0/Kestrel.exe) |
+| **Windows Installer** (`Kestrel-Setup.exe`) | **~166.8 MB** | Recommended for primary workstations. Provides a guided setup wizard, Start Menu and Desktop shortcuts, optional startup on boot, and Windows Add/Remove Programs registration. | [**Download Installer (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.0/Kestrel-Setup.exe) |
+| **Portable Executable** (`Kestrel.exe`) | **~94.8 MB** | Self-contained single binary. Runs directly from any directory or removable drive and supports in-app self-updates. | [**Download Portable (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.0/Kestrel.exe) |
 
 ### System Requirements
 - **Operating System:** Windows 11 (Build 22621+ for DWM Acrylic backdrop and rounded window corners) or Windows 10 (build 19041+ / version 2004+) 64-bit (`x64`).
