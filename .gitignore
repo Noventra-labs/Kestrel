@@ -27,6 +27,7 @@
 [Pp]ublish/
 *.nupkg
 *.snupkg
+checksums.txt
 
 # BenchmarkDotNet & Profiling Artifacts
 BenchmarkDotNet.Artifacts/
