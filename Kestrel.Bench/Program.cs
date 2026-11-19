@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using Beam.Models;
-using Beam.Services;
+using Kestrel.Models;
+using Kestrel.Services;
 
 // Kestrel micro-benchmark harness.
 // Measures per-query latency (p50 / p95 / max) and managed allocations for the search hot paths.

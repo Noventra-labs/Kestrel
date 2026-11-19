@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Noventra-Labs/Kestrel/releases/tag/v2.3.1"><img src="https://img.shields.io/badge/Download-v2.3.1-ff4444?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Version 2.3.1" /></a>
+  <a href="https://github.com/Noventra-Labs/Kestrel/releases/tag/v2.4.0"><img src="https://img.shields.io/badge/Download-v2.4.0-ff4444?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Version 2.4.0" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/Telemetry-Zero-blue?style=for-the-badge" alt="Zero Telemetry" />
   <img src="https://img.shields.io/badge/Idle%20RAM-48%20MB-purple?style=for-the-badge" alt="48 MB Idle RAM" />
@@ -34,8 +34,8 @@ Choose the edition that best fits how you work:
 
 | Edition | Size | What's Included | Download |
 | :--- | :--- | :--- | :--- |
-| **Windows Installer** (`Kestrel-Setup.exe`) | **~27.8 MB** | **Recommended.** Guided setup wizard, automatic updates, Start Menu & Desktop shortcuts, optional auto-start with Windows, and clean uninstaller in Windows Settings. | [⬇️ **Download Installer (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.3.1/Kestrel-Setup.exe) |
-| **Portable Edition** (`Kestrel.exe`) | **~26.6 MB** | Single standalone `.exe`. No installation required — run directly from your Downloads folder, desktop, or a USB thumb drive without modifying Windows system files. | [📦 **Download Portable (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.3.1/Kestrel.exe) |
+| **Windows Installer** (`Kestrel-Setup.exe`) | **~27.8 MB** | **Recommended.** Guided setup wizard, automatic updates, Start Menu & Desktop shortcuts, optional auto-start with Windows, and clean uninstaller in Windows Settings. | [⬇️ **Download Installer (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.4.0/Kestrel-Setup.exe) |
+| **Portable Edition** (`Kestrel.exe`) | **~26.6 MB** | Single standalone `.exe`. No installation required — run directly from your Downloads folder, desktop, or a USB thumb drive without modifying Windows system files. | [📦 **Download Portable (.exe)**](https://github.com/Noventra-Labs/Kestrel/releases/download/v2.4.0/Kestrel.exe) |
 
 > [!NOTE]
 > All releases, release notes, and file checksums are available on the [**Official GitHub Releases Page**](https://github.com/Noventra-Labs/Kestrel/releases).

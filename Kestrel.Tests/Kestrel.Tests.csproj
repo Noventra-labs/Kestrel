@@ -8,17 +8,17 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../Beam/Services/AiClient.cs" Link="AiClient.cs" />
-    <Compile Include="../Beam/Services/CloudIdentity.cs" Link="CloudIdentity.cs" />
-    <Compile Include="../Beam/Services/MemoryReductService.cs" Link="MemoryReductService.cs" />
-    <Compile Include="../Beam/Services/SearchEngine.cs" Link="SearchEngine.cs" />
-    <Compile Include="../Beam/Services/PowerDeveloperToolsService.cs" Link="PowerDeveloperToolsService.cs" />
-    <Compile Include="../Beam/Services/ToastNotification.cs" Link="ToastNotification.cs" />
-    <Compile Include="../Beam/Interop/IconGenerator.cs" Link="IconGenerator.cs" />
-    <Compile Include="../Beam/Interop/DwmApi.cs" Link="DwmApi.cs" />
-    <Compile Include="../Beam/Interop/GlobalKeyboardHook.cs" Link="GlobalKeyboardHook.cs" />
-    <Compile Include="../Beam/Models/LauncherItem.cs" Link="LauncherItem.cs" />
-    <Compile Include="../Beam/Models/ChatMessage.cs" Link="ChatMessage.cs" />
-    <Compile Include="../BeamInstaller/InstallationFiles.cs" Link="InstallationFiles.cs" />
+    <Compile Include="../Kestrel/Services/AiClient.cs" Link="AiClient.cs" />
+    <Compile Include="../Kestrel/Services/CloudIdentity.cs" Link="CloudIdentity.cs" />
+    <Compile Include="../Kestrel/Services/MemoryReductService.cs" Link="MemoryReductService.cs" />
+    <Compile Include="../Kestrel/Services/SearchEngine.cs" Link="SearchEngine.cs" />
+    <Compile Include="../Kestrel/Services/PowerDeveloperToolsService.cs" Link="PowerDeveloperToolsService.cs" />
+    <Compile Include="../Kestrel/Services/ToastNotification.cs" Link="ToastNotification.cs" />
+    <Compile Include="../Kestrel/Interop/IconGenerator.cs" Link="IconGenerator.cs" />
+    <Compile Include="../Kestrel/Interop/DwmApi.cs" Link="DwmApi.cs" />
+    <Compile Include="../Kestrel/Interop/GlobalKeyboardHook.cs" Link="GlobalKeyboardHook.cs" />
+    <Compile Include="../Kestrel/Models/LauncherItem.cs" Link="LauncherItem.cs" />
+    <Compile Include="../Kestrel/Models/ChatMessage.cs" Link="ChatMessage.cs" />
+    <Compile Include="../KestrelInstaller/InstallationFiles.cs" Link="InstallationFiles.cs" />
   </ItemGroup>
 </Project>

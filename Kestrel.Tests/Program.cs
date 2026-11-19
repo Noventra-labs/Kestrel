@@ -13,10 +13,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
-using Beam.Interop;
-using Beam.Models;
-using Beam.Services;
-using BeamInstaller;
+using Kestrel.Interop;
+using Kestrel.Models;
+using Kestrel.Services;
+using KestrelInstaller;
 
 internal static class Program
 {
@@ -146,7 +146,7 @@ internal static class Program
                 "TrimSingleProcess handles non-existent PID cleanly");
 
             // Smart Reclaim vs WorkingSetsAll & User Exclusions on FakePlatform (zero host OS mutation)
-            BeamSettings.Current.MemReductExcludedProcesses = new List<string> { "excludedapp" };
+            KestrelSettings.Current.MemReductExcludedProcesses = new List<string> { "excludedapp" };
             Check(MemoryReductService.IsProcessExcludedByUser("excludedapp"), "user exclusion list matches process name");
             var excludedSweep = MemoryReductService.ReduceMemoryByProfile(
                 MemoryCleanProfile.WorkingSetsAll,
@@ -154,7 +154,7 @@ internal static class Program
             Check(excludedSweep.ProcessesSkippedExcluded == 1 &&
                   !fake.TrimmedPids.Contains(104),
                 "WorkingSetsAll respects user exclusion list without touching excluded process");
-            BeamSettings.Current.MemReductExcludedProcesses.Clear();
+            KestrelSettings.Current.MemReductExcludedProcesses.Clear();
             fake.TrimmedPids.Clear();
 
             // Smart Reclaim default run protects foreground (101 = code), system (4, 500), and <25MB (105),
@@ -630,11 +630,11 @@ internal static class Program
             MemoryReductService.PathInspector = originalInspector;
 
             // Sustained-pressure Auto Memory Reduct state machine
-            Check(!BeamSettings.Current.AutoMemReductEnabled, "Auto Memory Reduct is disabled by default");
+            Check(!KestrelSettings.Current.AutoMemReductEnabled, "Auto Memory Reduct is disabled by default");
             MemoryReductService.ResetAutoCleanStateForTests();
-            BeamSettings.Current.AutoMemReductEnabled = true;
-            BeamSettings.Current.AutoMemReductThreshold = 85;
-            BeamSettings.Current.AutoMemReductMinAvailMb = 1536;
+            KestrelSettings.Current.AutoMemReductEnabled = true;
+            KestrelSettings.Current.AutoMemReductThreshold = 85;
+            KestrelSettings.Current.AutoMemReductMinAvailMb = 1536;
             var highPressure = new MemoryStats
             {
                 LoadPercent = 90,
@@ -644,11 +644,11 @@ internal static class Program
                 AvailPhysGb = 1.0
             };
             var t0 = DateTime.UtcNow;
-            Check(!MemoryReductService.ShouldTriggerAutoClean(highPressure, BeamSettings.Current, t0, out _),
+            Check(!MemoryReductService.ShouldTriggerAutoClean(highPressure, KestrelSettings.Current, t0, out _),
                 "1st high-pressure sample does not trigger auto-clean");
-            Check(!MemoryReductService.ShouldTriggerAutoClean(highPressure, BeamSettings.Current, t0.AddSeconds(10), out _),
+            Check(!MemoryReductService.ShouldTriggerAutoClean(highPressure, KestrelSettings.Current, t0.AddSeconds(10), out _),
                 "2nd high-pressure sample does not trigger auto-clean");
-            Check(MemoryReductService.ShouldTriggerAutoClean(highPressure, BeamSettings.Current, t0.AddSeconds(20), out _),
+            Check(MemoryReductService.ShouldTriggerAutoClean(highPressure, KestrelSettings.Current, t0.AddSeconds(20), out _),
                 "3rd consecutive sustained high-pressure sample triggers auto-clean");
 
             MemoryReductService.RecordAutoCleanOutcome(new MemoryCleanResult
@@ -659,7 +659,7 @@ internal static class Program
             }, t0.AddSeconds(20));
             Check(MemoryReductService.GetCurrentAutoCooldownSeconds() == 900,
                 "low-yield auto-clean engages 900s backoff cooldown");
-            Check(!MemoryReductService.ShouldTriggerAutoClean(highPressure, BeamSettings.Current, t0.AddSeconds(350), out _),
+            Check(!MemoryReductService.ShouldTriggerAutoClean(highPressure, KestrelSettings.Current, t0.AddSeconds(350), out _),
                 "backoff cooldown blocks re-triggering within 900s");
 
             var lowPressure = new MemoryStats
@@ -670,10 +670,10 @@ internal static class Program
                 TotalPhysGb = 16.0,
                 AvailPhysGb = 5.0
             };
-            MemoryReductService.ShouldTriggerAutoClean(lowPressure, BeamSettings.Current, t0.AddSeconds(400), out _);
+            MemoryReductService.ShouldTriggerAutoClean(lowPressure, KestrelSettings.Current, t0.AddSeconds(400), out _);
             Check(MemoryReductService.GetCurrentAutoCooldownSeconds() == 300,
                 "pressure relief resets auto-clean backoff to 300s");
-            BeamSettings.Current.AutoMemReductEnabled = false;
+            KestrelSettings.Current.AutoMemReductEnabled = false;
 
             // Process groups snapshot from FakePlatform
             var groups = MemoryReductService.GetProcessGroupsSnapshot(explicitForegroundPid: 101);

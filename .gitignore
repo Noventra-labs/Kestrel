@@ -59,6 +59,8 @@ public
 # =============================================================================
 beam-backend/
 beam-backend
+kestrel-backend/
+kestrel-backend
 
 # =============================================================================
 # Git Worktrees & Local Tooling
@@ -77,6 +79,8 @@ worktrees/
 .github/skills/
 .github/hooks/
 skills-lock.json
+brag-output/
+kestrel-film/
 
 # =============================================================================
 # Python Backend & Tooling (if any)

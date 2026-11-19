@@ -23,34 +23,34 @@ jobs:
           include-prerelease: true
 
       - name: Restore dependencies
-        run: dotnet restore Beam/Beam.csproj
+        run: dotnet restore Kestrel/Kestrel.csproj
 
       - name: Build and Publish Standalone Kestrel Executable
         run: >
-          dotnet publish Beam/Beam.csproj
+          dotnet publish Kestrel/Kestrel.csproj
           -c Release
           -r win-x64
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -o Beam/publish
+          -o Kestrel/publish
 
       - name: Stage Standalone Binary
-        run: Copy-Item Beam/publish/Kestrel.exe Kestrel.exe -Force
+        run: Copy-Item Kestrel/publish/Kestrel.exe Kestrel.exe -Force
         shell: pwsh
 
       - name: Build and Publish Setup Wizard Installer
         run: >
-          dotnet publish BeamInstaller/BeamInstaller.csproj
+          dotnet publish KestrelInstaller/KestrelInstaller.csproj
           -c Release
           -r win-x64
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -o BeamInstaller/publish
+          -o KestrelInstaller/publish
 
       - name: Stage Setup Wizard Binary
-        run: Copy-Item BeamInstaller/publish/Kestrel-Setup.exe Kestrel-Setup.exe -Force
+        run: Copy-Item KestrelInstaller/publish/Kestrel-Setup.exe Kestrel-Setup.exe -Force
         shell: pwsh
 
       - name: Generate SHA256 Checksums
