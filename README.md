@@ -135,6 +135,30 @@ Open Preferences from the tray icon context menu, the footer gear button, typing
 
 ---
 
+## Build from Source
+
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) on Windows x64.
+
+```powershell
+# Portable Kestrel.exe
+dotnet publish Kestrel/Kestrel.csproj -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o Kestrel/publish
+
+# Setup installer (embeds Kestrel/publish/Kestrel.exe)
+dotnet publish KestrelInstaller/KestrelInstaller.csproj -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o KestrelInstaller/publish
+
+# Tests
+dotnet build Kestrel.Tests/Kestrel.Tests.csproj
+dotnet exec Kestrel.Tests/bin/Debug/net10.0-windows/Kestrel.Tests.dll
+```
+
+Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml) to publish `Kestrel.exe`, `Kestrel-Setup.exe`, and `checksums.txt`.
+
+---
+
 ## Frequently Asked Questions
 
 <details>

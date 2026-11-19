@@ -9,6 +9,12 @@ on:
 permissions:
   contents: write
 
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  NUGET_XMLDOC_MODE: 'skip'
+
 jobs:
   build-and-release:
     runs-on: windows-latest
@@ -16,54 +22,79 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
+      - name: Prepare runner and check preinstalled .NET 10 SDK
+        id: check-dotnet
+        shell: pwsh
+        run: |
+          $nugetDir = Join-Path $env:RUNNER_TEMP 'nuget-packages'
+          New-Item -ItemType Directory -Path $nugetDir -Force | Out-Null
+          "NUGET_PACKAGES=$nugetDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          try {
+            Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $nugetDir -ErrorAction SilentlyContinue
+          } catch {}
+
+          $sdks = if (Get-Command dotnet -ErrorAction SilentlyContinue) { @(& dotnet --list-sdks 2>$null) } else { @() }
+          $has10 = [bool]($sdks | Select-String '^10\.0\.')
+          "has_dotnet10=$($has10.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Setup .NET SDK (fallback)
+        if: steps.check-dotnet.outputs.has_dotnet10 != 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          include-prerelease: true
 
-      - name: Restore dependencies
-        run: dotnet restore Kestrel/Kestrel.csproj
-
-      - name: Build and Publish Standalone Kestrel Executable
-        run: >
-          dotnet publish Kestrel/Kestrel.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          -p:DebugType=None
-          -p:DebugSymbols=false
-          -o Kestrel/publish
-
-      - name: Stage Standalone Binary
-        run: Copy-Item Kestrel/publish/Kestrel.exe Kestrel.exe -Force
+      - name: Record active .NET SDK version
+        id: dotnet-info
         shell: pwsh
-
-      - name: Build and Publish Setup Wizard Installer
-        run: >
-          dotnet publish KestrelInstaller/KestrelInstaller.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          -p:DebugType=None
-          -p:DebugSymbols=false
-          -o KestrelInstaller/publish
-
-      - name: Stage Setup Wizard Binary
-        run: Copy-Item KestrelInstaller/publish/Kestrel-Setup.exe Kestrel-Setup.exe -Force
-        shell: pwsh
-
-      - name: Generate SHA256 Checksums
         run: |
-          Get-FileHash Kestrel.exe -Algorithm SHA256 | Format-List | Out-File -FilePath checksums.txt
-          Get-FileHash Kestrel-Setup.exe -Algorithm SHA256 | Format-List | Out-File -FilePath checksums.txt -Append
+          $ver = (& dotnet --version).Trim()
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Using .NET SDK $ver"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-win-x64-${{ steps.dotnet-info.outputs.version }}-${{ hashFiles('Kestrel/Kestrel.csproj', 'KestrelInstaller/KestrelInstaller.csproj') }}
+          restore-keys: |
+            nuget-win-x64-${{ steps.dotnet-info.outputs.version }}-
+            nuget-win-x64-
+
+      - name: Build, Publish, Stage, and Hash Binaries
         shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          dotnet publish Kestrel/Kestrel.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o Kestrel/publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Copy-Item Kestrel/publish/Kestrel.exe Kestrel.exe -Force
+
+          dotnet publish KestrelInstaller/KestrelInstaller.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o KestrelInstaller/publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Copy-Item KestrelInstaller/publish/Kestrel-Setup.exe Kestrel-Setup.exe -Force
+
+          Get-FileHash Kestrel.exe, Kestrel-Setup.exe -Algorithm SHA256 | Format-List | Out-File -FilePath checksums.txt -Encoding utf8
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
