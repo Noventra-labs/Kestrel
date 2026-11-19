@@ -164,7 +164,7 @@ namespace KestrelInstaller
                 BtnSecondary.Visibility = Visibility.Visible;
                 TxtSecondaryBtn.Text = "Cancel";
                 BtnPrimary.Visibility = Visibility.Visible;
-                TxtPrimaryBtn.Text = "Install Kestrel";
+                TxtPrimaryBtn.Text = "Install";
             }
             else if (step == 2)
             {
@@ -196,7 +196,7 @@ namespace KestrelInstaller
                 InstallingStepLabel.Text = stepLabel;
                 InstallPercentText.Text = $"{percentage}%";
 
-                double trackWidth = 380.0;
+                double trackWidth = 340.0;
                 InstallProgressFill.Width = (percentage / 100.0) * trackWidth;
             });
         }

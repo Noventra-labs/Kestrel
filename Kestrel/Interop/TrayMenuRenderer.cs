@@ -7,22 +7,21 @@ using System.Windows.Forms;
 namespace Kestrel.Interop
 {
     /// <summary>
-    /// Modern dark-fluent renderer for the Kestrel system tray context menu.
-    /// Provides smooth rounded selection pills, crisp Segoe typography, right-aligned
-    /// shortcut keycaps, and seamless dark mode styling matching Kestrel's aesthetic.
+    /// Minimal dark renderer for the Kestrel system tray context menu.
     /// </summary>
     public sealed class TrayMenuRenderer : ToolStripRenderer
     {
-        private static readonly Color BgColor = Color.FromArgb(15, 17, 24);            // #0F1118
-        private static readonly Color BorderColor = Color.FromArgb(40, 46, 62);        // #282E3E
-        private static readonly Color HoverBg = Color.FromArgb(32, 38, 54);            // #202636
-        private static readonly Color HoverBorder = Color.FromArgb(52, 60, 82);        // #343C52
-        private static readonly Color SeparatorColor = Color.FromArgb(28, 33, 46);     // #1C212E
-        private static readonly Color TextColor = Color.FromArgb(241, 245, 249);        // #F1F5F9
+        private static readonly Color BgColor = Color.FromArgb(15, 17, 24);
+        private static readonly Color BorderColor = Color.FromArgb(34, 38, 50);
+        private static readonly Color HoverBg = Color.FromArgb(30, 35, 48);
+        private static readonly Color SeparatorColor = Color.FromArgb(28, 33, 46);
+        private static readonly Color TextColor = Color.FromArgb(241, 245, 249);
         private static readonly Color TextSelectedColor = Color.FromArgb(255, 255, 255);
-        private static readonly Color ShortcutColor = Color.FromArgb(126, 139, 155);   // #7E8B9B
+        private static readonly Color ShortcutColor = Color.FromArgb(126, 139, 155);
         private static readonly Color ShortcutSelected = Color.FromArgb(174, 186, 202);
-        private static readonly Color BrandAccent = Color.FromArgb(255, 99, 99);       // #FF6363
+
+        private const int MenuItemWidth = 204;
+        private const int MenuItemHeight = 26;
 
         public static Font GetMenuFont()
         {
@@ -47,7 +46,7 @@ namespace Kestrel.Interop
                 cms.ShowCheckMargin = false;
                 cms.BackColor = BgColor;
                 cms.ForeColor = TextColor;
-                cms.Padding = new Padding(4, 6, 4, 6);
+                cms.Padding = new Padding(4, 4, 4, 4);
                 cms.DropShadowEnabled = true;
             }
         }
@@ -57,8 +56,18 @@ namespace Kestrel.Interop
             base.InitializeItem(item);
             if (item is ToolStripMenuItem mi)
             {
-                mi.AutoSize = true;
-                mi.Padding = new Padding(12, 6, 12, 6);
+                mi.AutoSize = false;
+                mi.Width = MenuItemWidth;
+                mi.Height = MenuItemHeight;
+                mi.Padding = Padding.Empty;
+            }
+            else if (item is ToolStripSeparator sep)
+            {
+                sep.AutoSize = false;
+                sep.Width = MenuItemWidth;
+                sep.Height = 7;
+                sep.Margin = Padding.Empty;
+                sep.Padding = Padding.Empty;
             }
         }
 
@@ -79,81 +88,45 @@ namespace Kestrel.Interop
         {
             if (e.Item.Selected && e.Item.Enabled)
             {
-                var rect = new Rectangle(4, 1, e.Item.Width - 8, e.Item.Height - 2);
-                using var path = CreateRoundedRectangle(rect, 5);
+                var rect = new Rectangle(2, 1, e.Item.Width - 4, e.Item.Height - 2);
+                using var path = CreateRoundedRectangle(rect, 4);
                 using var brush = new SolidBrush(HoverBg);
-                using var pen = new Pen(HoverBorder, 1);
 
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 e.Graphics.FillPath(brush, path);
-                e.Graphics.DrawPath(pen, path);
             }
         }
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
+            // Ignore WinForms' duplicate shortcut pass if ShortcutKeyDisplayString was set externally
+            if (e.Item is ToolStripMenuItem miGuard &&
+                !string.IsNullOrEmpty(miGuard.ShortcutKeyDisplayString) &&
+                string.Equals(e.Text, miGuard.ShortcutKeyDisplayString, StringComparison.Ordinal) &&
+                !string.Equals(miGuard.Text, miGuard.ShortcutKeyDisplayString, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
             bool isSelected = e.Item.Selected && e.Item.Enabled;
             Color foreColor = isSelected ? TextSelectedColor : TextColor;
-            bool isPrimary = string.Equals(e.Item.Tag as string, "Primary", StringComparison.OrdinalIgnoreCase);
 
-            int textLeft = 14;
-
-            // Draw clean Kestrel brand diamond for the primary "Open Kestrel" item
-            if (isPrimary)
-            {
-                int diamondSize = 7;
-                int dy = (e.Item.Height - diamondSize) / 2;
-                int dx = 14;
-                var diamondPoints = new Point[]
-                {
-                    new(dx + diamondSize / 2, dy),
-                    new(dx + diamondSize, dy + diamondSize / 2),
-                    new(dx + diamondSize / 2, dy + diamondSize),
-                    new(dx, dy + diamondSize / 2)
-                };
-
-                using var brandBrush = new SolidBrush(BrandAccent);
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                e.Graphics.FillPolygon(brandBrush, diamondPoints);
-
-                textLeft = 14 + diamondSize + 8;
-            }
-
-            var textRect = new Rectangle(textLeft, 0, e.Item.Width - textLeft - 8, e.Item.Height);
+            const int textLeft = 10;
+            var textRect = new Rectangle(textLeft, 0, e.Item.Width - textLeft - 10, e.Item.Height);
             var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
 
             Font baseFont = e.TextFont ?? GetMenuFont();
-            Font font = baseFont;
-            bool disposeFont = false;
-            if (isPrimary && !baseFont.Bold)
-            {
-                font = new Font(baseFont, FontStyle.Bold);
-                disposeFont = true;
-            }
+            TextRenderer.DrawText(e.Graphics, e.Item.Text, baseFont, textRect, foreColor, flags);
 
-            try
-            {
-                TextRenderer.DrawText(e.Graphics, e.Text, font, textRect, foreColor, flags);
-            }
-            finally
-            {
-                if (disposeFont)
-                {
-                    font.Dispose();
-                }
-            }
-
-            // Draw right-aligned shortcut if specified
-            if (e.Item is ToolStripMenuItem mi && !string.IsNullOrEmpty(mi.ShortcutKeyDisplayString))
+            string? shortcutText = (e.Item.Tag as string) ?? (e.Item as ToolStripMenuItem)?.ShortcutKeyDisplayString;
+            if (!string.IsNullOrEmpty(shortcutText))
             {
                 Color scColor = isSelected ? ShortcutSelected : ShortcutColor;
-                var scRect = new Rectangle(14, 0, e.Item.Width - 28, e.Item.Height);
-                var scFlags = TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
-
+                var scFlags = TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
                 using var scFont = new Font(baseFont.FontFamily, 8.5f, FontStyle.Regular);
-                TextRenderer.DrawText(e.Graphics, mi.ShortcutKeyDisplayString, scFont, scRect, scColor, scFlags);
+                TextRenderer.DrawText(e.Graphics, shortcutText, scFont, textRect, scColor, scFlags);
             }
         }
 
@@ -161,12 +134,11 @@ namespace Kestrel.Interop
         {
             int y = e.Item.Height / 2;
             using var pen = new Pen(SeparatorColor, 1);
-            e.Graphics.DrawLine(pen, 12, y, e.Item.Width - 12, y);
+            e.Graphics.DrawLine(pen, 10, y, e.Item.Width - 10, y);
         }
 
         protected override void OnRenderImageMargin(ToolStripRenderEventArgs e)
         {
-            // Suppress white/grey gutter
         }
 
         private static GraphicsPath CreateRoundedRectangle(Rectangle bounds, int radius)

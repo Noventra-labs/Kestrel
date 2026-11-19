@@ -350,41 +350,25 @@ namespace Kestrel
                 menu.HandleCreated += (s, e) => ApplyDwmDarkAndRound();
                 menu.Opening += (s, e) => ApplyDwmDarkAndRound();
 
-                var openItem = new Forms.ToolStripMenuItem("Open Kestrel")
-                {
-                    ShortcutKeyDisplayString = "Win",
-                    Tag = "Primary"
-                };
+                var openItem = new Forms.ToolStripMenuItem("Open Kestrel") { Tag = "Win" };
                 openItem.Click += (s, e) => Dispatcher.Invoke(Summon);
 
-                var geminiItem = new Forms.ToolStripMenuItem("AI Assistant Chat")
-                {
-                    ShortcutKeyDisplayString = "Tab"
-                };
+                var geminiItem = new Forms.ToolStripMenuItem("AI Assistant") { Tag = "Tab" };
                 geminiItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenGeminiChatOverlay(""); });
 
-                var fileItem = new Forms.ToolStripMenuItem("Search Local Files")
-                {
-                    ShortcutKeyDisplayString = "Ctrl+F"
-                };
+                var fileItem = new Forms.ToolStripMenuItem("Search Files") { Tag = "Ctrl+F" };
                 fileItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); SwitchMode(LauncherMode.FileSearch); });
 
-                var clipItem = new Forms.ToolStripMenuItem("Clipboard History")
-                {
-                    ShortcutKeyDisplayString = "Ctrl+Shift+V"
-                };
+                var clipItem = new Forms.ToolStripMenuItem("Clipboard") { Tag = "Ctrl+Shift+V" };
                 clipItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); SwitchMode(LauncherMode.ClipboardHistory); });
 
-                var procItem = new Forms.ToolStripMenuItem("Process Manager");
+                var procItem = new Forms.ToolStripMenuItem("Processes");
                 procItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); SwitchMode(LauncherMode.ProcessKiller); });
 
-                var settingsItem = new Forms.ToolStripMenuItem("Preferences && Settings")
-                {
-                    ShortcutKeyDisplayString = "Ctrl+,"
-                };
+                var settingsItem = new Forms.ToolStripMenuItem("Preferences") { Tag = "Ctrl+," };
                 settingsItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenSettingsOverlay(); });
 
-                var exitItem = new Forms.ToolStripMenuItem("Exit Kestrel");
+                var exitItem = new Forms.ToolStripMenuItem("Exit");
                 exitItem.Click += (s, e) => Dispatcher.Invoke(() =>
                 {
                     CloseForReal();
@@ -404,7 +388,7 @@ namespace Kestrel
                 {
                     Icon = icon,
                     ContextMenuStrip = menu,
-                    Text = "Kestrel Launcher — Active (Press Windows Key)",
+                    Text = "Kestrel",
                     Visible = true
                 };
 

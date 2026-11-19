@@ -4,15 +4,13 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Kestrel.Interop;
 
 namespace Kestrel.Services
 {
     /// <summary>
-    /// Lightweight, click-through, non-focus-stealing floating HUD toast (WS_EX_TRANSPARENT | WS_EX_NOACTIVATE).
-    /// Allows Kestrel to hide in 0ms while displaying visual confirmation over the desktop.
+    /// Minimal, click-through, non-focus-stealing floating HUD toast (WS_EX_TRANSPARENT | WS_EX_NOACTIVATE).
     /// </summary>
     public static class ToastNotification
     {
@@ -20,10 +18,35 @@ namespace Kestrel.Services
         private static TextBlock? _toastText;
         private static DispatcherTimer? _hideTimer;
 
+        internal static string NormalizeMessage(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return string.Empty;
+
+            ReadOnlySpan<char> span = message.AsSpan().Trim();
+            while (!span.IsEmpty)
+            {
+                char c = span[0];
+                if (c is '✓' or '✔' or '⚠' or 'ℹ' or '✦' or '•' or '\uFE0F' or ' ')
+                {
+                    span = span[1..];
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return span.Trim().ToString();
+        }
+
         public static void Show(string message)
         {
             if (!KestrelSettings.Current.EnableToastNotifications) return;
             if (System.Windows.Application.Current?.Dispatcher == null) return;
+
+            string clean = NormalizeMessage(message);
+            if (string.IsNullOrEmpty(clean)) return;
 
             System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
             {
@@ -32,14 +55,13 @@ namespace Kestrel.Services
                     EnsureWindowCreated();
                     if (_toastWindow == null || _toastText == null) return;
 
-                    _toastText.Text = message;
+                    _toastText.Text = clean;
                     _toastWindow.Opacity = 1.0;
 
-                    // Position horizontally centered, 90px above primary screen work area bottom
                     var workArea = SystemParameters.WorkArea;
                     _toastWindow.UpdateLayout();
                     _toastWindow.Left = workArea.Left + (workArea.Width - _toastWindow.ActualWidth) / 2;
-                    _toastWindow.Top = workArea.Bottom - 96;
+                    _toastWindow.Top = workArea.Bottom - 72;
 
                     if (!_toastWindow.IsVisible)
                     {
@@ -47,13 +69,13 @@ namespace Kestrel.Services
                     }
 
                     _hideTimer?.Stop();
-                    _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2800) };
+                    _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2000) };
                     _hideTimer.Tick += (s, e) =>
                     {
                         _hideTimer.Stop();
                         if (_toastWindow != null && _toastWindow.IsVisible)
                         {
-                            var fade = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(250));
+                            var fade = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(160));
                             fade.Completed += (_, _) => _toastWindow.Hide();
                             _toastWindow.BeginAnimation(UIElement.OpacityProperty, fade);
                         }
@@ -70,47 +92,22 @@ namespace Kestrel.Services
 
             _toastText = new TextBlock
             {
-                Foreground = System.Windows.Media.Brushes.White,
-                FontSize = 13.5,
-                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(241, 245, 249)),
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 2, 0)
+                Margin = new Thickness(0)
             };
-
-            var diamond = new System.Windows.Shapes.Path
-            {
-                Width = 12,
-                Height = 12,
-                Stretch = Stretch.Uniform,
-                Fill = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 99, 99)),
-                VerticalAlignment = VerticalAlignment.Center,
-                Data = Geometry.Parse("M 0,6 L 6,0 L 12,6 L 6,12 Z")
-            };
-
-            var stack = new StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            stack.Children.Add(diamond);
-            stack.Children.Add(_toastText);
 
             var pill = new Border
             {
-                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(136, 10, 13, 20)),
-                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(56, 255, 255, 255)),
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(230, 12, 14, 20)),
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(36, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(18),
-                Padding = new Thickness(16, 8, 18, 8),
-                Margin = new Thickness(16),
-                Effect = new DropShadowEffect
-                {
-                    BlurRadius = 18,
-                    ShadowDepth = 4,
-                    Opacity = 0.65,
-                    Color = Colors.Black
-                },
-                Child = stack
+                CornerRadius = new CornerRadius(7),
+                Padding = new Thickness(12, 6, 12, 6),
+                Margin = new Thickness(8),
+                Child = _toastText
             };
 
             _toastWindow = new Window

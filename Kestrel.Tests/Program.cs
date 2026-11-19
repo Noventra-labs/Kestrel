@@ -971,6 +971,11 @@ internal static class Program
                   argsSearch.SequenceEqual(new[] { "--incognito", "https://www.google.com/search?q=hello%20world" }),
                 "QuickOperationsService.BuildPrivateBrowsingArguments handles bare, domain, URL, and search queries");
 
+            Check(ToastNotification.NormalizeMessage("✓ Kestrel updated") == "Kestrel updated" &&
+                  ToastNotification.NormalizeMessage("⚠ Elevation cancelled") == "Elevation cancelled" &&
+                  ToastNotification.NormalizeMessage("   Plain message  ") == "Plain message",
+                "ToastNotification.NormalizeMessage strips leading status glyphs for minimal text");
+
             Console.WriteLine($"{_passed} checks passed.");
         }
         finally
