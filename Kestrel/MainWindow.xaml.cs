@@ -208,6 +208,8 @@ namespace Kestrel
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             ApplyAppearanceSettings(_settings);
+            TxtUpdateStatus.Text = $"Kestrel is up to date (v{UpdateService.CurrentVersion})";
+            SettingsSavedNotice.Text = $"Kestrel v{UpdateService.CurrentVersion} • Noventra-Labs";
             if (_settings.EnableFileSearch)
             {
                 FileSearchService.StartBackgroundIndexing();
@@ -2251,7 +2253,7 @@ namespace Kestrel
             RefreshIndexTelemetryText();
 
             _isLoadingSettingsUi = false;
-            SettingsSavedNotice.Text = "Kestrel v2.4.1 • Noventra-Labs";
+            SettingsSavedNotice.Text = $"Kestrel v{UpdateService.CurrentVersion} • Noventra-Labs";
             SettingsOverlay.Visibility = Visibility.Visible;
             AnimateIn(SettingsOverlay, 8);
         }
@@ -2668,6 +2670,7 @@ namespace Kestrel
         {
             UpdateProgressContainer.Visibility = Visibility.Collapsed;
             BtnCancelUpdate.Visibility = Visibility.Collapsed;
+            BtnCheckUpdates.Visibility = Visibility.Visible;
             UpdateProgressBar.IsIndeterminate = false;
             UpdateProgressBar.Value = 0;
             TxtUpdateStage.Text = "Preparing update...";
@@ -2677,117 +2680,121 @@ namespace Kestrel
         private async void CheckUpdates_Click(object sender, MouseButtonEventArgs e)
         {
             if (_isUpdating) return;
+            _isUpdating = true;
 
-            BtnCheckUpdatesText.Text = "Checking...";
-            var info = await UpdateService.CheckForUpdatesAsync(force: true);
-            if (info != null && info.IsNewer)
+            try
             {
+                BtnCheckUpdatesText.Text = "Checking...";
+                var info = await UpdateService.CheckForUpdatesAsync(force: true);
+                if (info == null)
+                {
+                    ResetUpdateProgressUi();
+                    TxtUpdateStatus.Text = "Unable to check for updates";
+                    BtnCheckUpdatesText.Text = "Check for Updates";
+                    ToastNotification.Show("Unable to check for updates");
+                    return;
+                }
+
+                if (!info.IsNewer)
+                {
+                    ResetUpdateProgressUi();
+                    UpdateBadge.Visibility = Visibility.Collapsed;
+                    TxtUpdateStatus.Text = $"Kestrel is up to date (v{UpdateService.CurrentVersion})";
+                    BtnCheckUpdatesText.Text = "Up to date";
+                    ToastNotification.Show("Kestrel is up to date");
+                    return;
+                }
+
                 TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
                 UpdateBadge.Visibility = Visibility.Visible;
                 UpdateVersionText.Text = info.LatestTag;
 
-                if (UpdateService.IsStandaloneKestrelExe() && !string.IsNullOrWhiteSpace(info.ExecutableUrl))
-                {
-                    _isUpdating = true;
-                    _updateCts = new CancellationTokenSource();
-                    _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(2);
-
-                    UpdateProgressContainer.Visibility = Visibility.Visible;
-                    BtnCancelUpdate.Visibility = Visibility.Visible;
-                    UpdateProgressBar.IsIndeterminate = info.ExecutableSizeBytes <= 0;
-                    UpdateProgressBar.Value = 0;
-
-                    string sizeLabel = info.ExecutableSizeBytes > 0
-                        ? $" ({info.ExecutableSizeBytes / (1024.0 * 1024.0):F1} MB)"
-                        : "";
-                    TxtUpdateStatus.Text = $"Downloading {info.LatestTag}{sizeLabel}...";
-                    TxtUpdateStage.Text = $"Downloading {info.LatestTag}...";
-                    TxtUpdateBytes.Text = info.ExecutableSizeBytes > 0
-                        ? $"0.0 MB / {info.ExecutableSizeBytes / (1024.0 * 1024.0):F1} MB (0%)"
-                        : "0%";
-                    BtnCheckUpdatesText.Text = "0%";
-
-                    var progress = new Progress<UpdateProgressReport>(report =>
-                    {
-                        switch (report.Stage)
-                        {
-                            case UpdateStage.Downloading:
-                                UpdateProgressBar.IsIndeterminate = report.TotalBytes <= 0;
-                                UpdateProgressBar.Value = report.Percentage;
-                                BtnCheckUpdatesText.Text = report.TotalBytes > 0 ? $"{report.Percentage}%" : "...";
-                                TxtUpdateStage.Text = $"Downloading {info.LatestTag}...";
-                                TxtUpdateBytes.Text = report.TotalBytes > 0
-                                    ? $"{report.BytesReceived / (1024.0 * 1024.0):F1} MB / {report.TotalBytes / (1024.0 * 1024.0):F1} MB ({report.Percentage}%)"
-                                    : $"{report.BytesReceived / (1024.0 * 1024.0):F1} MB";
-                                break;
-
-                            case UpdateStage.Verifying:
-                                UpdateProgressBar.IsIndeterminate = true;
-                                BtnCancelUpdate.Visibility = Visibility.Collapsed;
-                                BtnCheckUpdatesText.Text = "Verifying...";
-                                TxtUpdateStage.Text = "Verifying SHA-256 integrity...";
-                                TxtUpdateBytes.Text = "100%";
-                                break;
-
-                            case UpdateStage.Installing:
-                                UpdateProgressBar.IsIndeterminate = true;
-                                BtnCancelUpdate.Visibility = Visibility.Collapsed;
-                                BtnCheckUpdatesText.Text = "Restarting...";
-                                TxtUpdateStage.Text = "Installing & restarting Kestrel...";
-                                TxtUpdateBytes.Text = "";
-                                _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(15);
-                                break;
-                        }
-                    });
-
-                    try
-                    {
-                        var result = await UpdateService.DownloadAndApplyUpdateAsync(info, progress, _updateCts.Token);
-
-                        if (result.Started)
-                        {
-                            _isRestartingForUpdate = true;
-                            TxtUpdateStatus.Text = $"Restarting to {info.LatestTag}...";
-                            BtnCheckUpdatesText.Text = "Restarting...";
-                            CloseForReal();
-                            System.Windows.Application.Current.Shutdown();
-                            return;
-                        }
-
-                        ResetUpdateProgressUi();
-                        if (result.Cancelled)
-                        {
-                            TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
-                            BtnCheckUpdatesText.Text = "Update Now";
-                            ToastNotification.Show("Update cancelled");
-                        }
-                        else
-                        {
-                            TxtUpdateStatus.Text = $"Update failed: {result.ErrorMessage ?? "Unknown error"}";
-                            BtnCheckUpdatesText.Text = "Retry Update";
-                            ToastNotification.Show("Auto-update failed — opening download in browser");
-                            UpdateService.OpenReleasePage(UpdateService.ResolveDownloadTargetUrl(info));
-                        }
-                    }
-                    finally
-                    {
-                        _updateCts.Dispose();
-                        _updateCts = null;
-                        _isUpdating = false;
-                    }
-                }
-                else
+                if (!UpdateService.IsStandaloneKestrelExe() || string.IsNullOrWhiteSpace(info.ExecutableUrl))
                 {
                     BtnCheckUpdatesText.Text = "Update Now";
                     UpdateService.OpenReleasePage(UpdateService.ResolveDownloadTargetUrl(info));
+                    return;
+                }
+
+                _updateCts = new CancellationTokenSource();
+                _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(2);
+
+                BtnCheckUpdates.Visibility = Visibility.Collapsed;
+                UpdateProgressContainer.Visibility = Visibility.Visible;
+                BtnCancelUpdate.Visibility = Visibility.Visible;
+                UpdateProgressBar.IsIndeterminate = info.ExecutableSizeBytes <= 0;
+                UpdateProgressBar.Value = 0;
+
+                string sizeLabel = info.ExecutableSizeBytes > 0
+                    ? $" ({info.ExecutableSizeBytes / (1024.0 * 1024.0):F1} MB)"
+                    : "";
+                TxtUpdateStatus.Text = $"Downloading {info.LatestTag}{sizeLabel}...";
+                TxtUpdateStage.Text = $"Downloading {info.LatestTag}...";
+                TxtUpdateBytes.Text = info.ExecutableSizeBytes > 0
+                    ? $"0.0 MB / {info.ExecutableSizeBytes / (1024.0 * 1024.0):F1} MB (0%)"
+                    : "0%";
+
+                var progress = new Progress<UpdateProgressReport>(report =>
+                {
+                    switch (report.Stage)
+                    {
+                        case UpdateStage.Downloading:
+                            UpdateProgressBar.IsIndeterminate = report.TotalBytes <= 0;
+                            UpdateProgressBar.Value = report.Percentage;
+                            TxtUpdateStage.Text = $"Downloading {info.LatestTag}...";
+                            TxtUpdateBytes.Text = report.TotalBytes > 0
+                                ? $"{report.BytesReceived / (1024.0 * 1024.0):F1} MB / {report.TotalBytes / (1024.0 * 1024.0):F1} MB ({report.Percentage}%)"
+                                : $"{report.BytesReceived / (1024.0 * 1024.0):F1} MB";
+                            break;
+
+                        case UpdateStage.Verifying:
+                            UpdateProgressBar.IsIndeterminate = true;
+                            BtnCancelUpdate.Visibility = Visibility.Collapsed;
+                            TxtUpdateStage.Text = "Verifying SHA-256 integrity...";
+                            TxtUpdateBytes.Text = "100%";
+                            break;
+
+                        case UpdateStage.Installing:
+                            UpdateProgressBar.IsIndeterminate = true;
+                            BtnCancelUpdate.Visibility = Visibility.Collapsed;
+                            TxtUpdateStage.Text = "Installing & restarting Kestrel...";
+                            TxtUpdateBytes.Text = "";
+                            _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(15);
+                            break;
+                    }
+                });
+
+                var result = await UpdateService.DownloadAndApplyUpdateAsync(info, progress, _updateCts.Token);
+
+                if (result.Started)
+                {
+                    _isRestartingForUpdate = true;
+                    TxtUpdateStatus.Text = $"Restarting to {info.LatestTag}...";
+                    CloseForReal();
+                    System.Windows.Application.Current.Shutdown();
+                    return;
+                }
+
+                ResetUpdateProgressUi();
+                if (result.Cancelled)
+                {
+                    TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
+                    BtnCheckUpdatesText.Text = "Update Now";
+                    ToastNotification.Show("Update cancelled");
+                }
+                else
+                {
+                    TxtUpdateStatus.Text = $"Update failed: {result.ErrorMessage ?? "Unknown error"}";
+                    BtnCheckUpdatesText.Text = "Retry Update";
+                    ToastNotification.Show("Auto-update failed — opening download in browser");
+                    UpdateService.OpenReleasePage(UpdateService.ResolveDownloadTargetUrl(info));
                 }
             }
-            else
+            finally
             {
-                ResetUpdateProgressUi();
-                TxtUpdateStatus.Text = $"Kestrel is up to date (v{UpdateService.CurrentVersion})";
-                BtnCheckUpdatesText.Text = "Up to Date ✓";
-                ToastNotification.Show("✓ Kestrel is running the latest version");
+                _updateCts?.Dispose();
+                _updateCts = null;
+                _isUpdating = false;
             }
         }
 

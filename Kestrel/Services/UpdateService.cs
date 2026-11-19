@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -42,7 +43,46 @@ namespace Kestrel.Services
 
     public static class UpdateService
     {
-        public static readonly Version CurrentVersion = new Version(2, 4, 0);
+        public static readonly Version CurrentVersion = ResolveCurrentVersion(typeof(UpdateService).Assembly);
+
+        internal static Version NormalizeVersion(Version version)
+        {
+            int build = version.Build >= 0 ? version.Build : 0;
+            return version.Revision > 0
+                ? new Version(version.Major, version.Minor, build, version.Revision)
+                : new Version(version.Major, version.Minor, build);
+        }
+
+        internal static bool TryParseNormalizedVersion(string? raw, out Version version)
+        {
+            version = new Version(0, 0, 0);
+            if (string.IsNullOrWhiteSpace(raw))
+                return false;
+
+            string clean = raw.Trim().TrimStart('v', 'V');
+            int plusIdx = clean.IndexOf('+');
+            if (plusIdx >= 0)
+                clean = clean[..plusIdx];
+
+            if (!Version.TryParse(clean, out var parsed))
+                return false;
+
+            version = NormalizeVersion(parsed);
+            return true;
+        }
+
+        internal static Version ResolveCurrentVersion(Assembly assembly)
+        {
+            string? infoVersion = assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion;
+
+            if (TryParseNormalizedVersion(infoVersion, out var parsed))
+                return parsed;
+
+            var asmVersion = assembly.GetName().Version;
+            return asmVersion != null ? NormalizeVersion(asmVersion) : new Version(0, 0, 0);
+        }
         private static readonly HttpClient _httpClient = new HttpClient();
         private static readonly HttpClient _downloadClient = new HttpClient();
         private static DateTime _lastCheckTime = DateTime.MinValue;
@@ -76,7 +116,7 @@ namespace Kestrel.Services
             }
             catch
             {
-                return CachedUpdateInfo;
+                return force ? null : CachedUpdateInfo;
             }
         }
 
@@ -89,12 +129,8 @@ namespace Kestrel.Services
             string body = root.TryGetProperty("body", out var bodyElem) ? bodyElem.GetString() ?? "" : "";
             string htmlUrl = root.TryGetProperty("html_url", out var htmlElem) ? htmlElem.GetString() ?? "" : "";
 
-            string cleanTag = tagName.TrimStart('v', 'V');
-            bool isNewer = false;
-            if (Version.TryParse(cleanTag, out var latestVer))
-            {
-                isNewer = latestVer > currentVersion;
-            }
+            bool isNewer = TryParseNormalizedVersion(tagName, out var latestVer)
+                && latestVer > NormalizeVersion(currentVersion);
 
             string installerUrl = "";
             string executableUrl = "";

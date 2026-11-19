@@ -201,7 +201,7 @@ namespace Kestrel
                 {
                     unKey.SetValue("DisplayName", "Kestrel", RegistryValueKind.String);
                     unKey.SetValue("Publisher", "Noventra-Labs", RegistryValueKind.String);
-                    unKey.SetValue("DisplayVersion", "2.4.1", RegistryValueKind.String);
+                    unKey.SetValue("DisplayVersion", UpdateService.CurrentVersion.ToString(), RegistryValueKind.String);
                     unKey.SetValue("DisplayIcon", File.Exists(iconPath) ? iconPath : exePath, RegistryValueKind.String);
                     unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                     unKey.SetValue("UninstallString", $"\"{uninstallerPath}\" --uninstall", RegistryValueKind.String);

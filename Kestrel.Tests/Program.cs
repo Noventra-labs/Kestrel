@@ -867,6 +867,26 @@ internal static class Program
             Check(UpdateService.ResolveDownloadTargetUrl(parsedUpdate) == parsedUpdate.ExecutableUrl,
                 "UpdateService prefers lightweight Kestrel.exe over Kestrel-Setup.exe for updates");
 
+            Check(!UpdateService.ParseReleaseJson("""{"tag_name":"v2.4.1"}""", new Version(2, 4, 1)).IsNewer &&
+                  !UpdateService.ParseReleaseJson("""{"tag_name":"v2.4.1"}""", new Version(2, 4, 1, 0)).IsNewer &&
+                  !UpdateService.ParseReleaseJson("""{"tag_name":"v2.4.1.0"}""", new Version(2, 4, 1)).IsNewer &&
+                  !UpdateService.ParseReleaseJson("""{"tag_name":"v2.4"}""", new Version(2, 4, 0)).IsNewer &&
+                  !UpdateService.ParseReleaseJson("""{"tag_name":"v2.4.0"}""", new Version(2, 4, 1)).IsNewer &&
+                  UpdateService.ParseReleaseJson("""{"tag_name":"v2.4.2"}""", new Version(2, 4, 1)).IsNewer,
+                "UpdateService version comparison normalizes 3-part/4-part versions and prevents equal/older update loops");
+
+            Check(UpdateService.TryParseNormalizedVersion("2.4.1+5026403f44db65afd57ff612fc1146eb3e718f34", out var vInfo) &&
+                  vInfo.ToString() == "2.4.1" &&
+                  UpdateService.TryParseNormalizedVersion("2.4.1.2", out var vRev) &&
+                  vRev.ToString() == "2.4.1.2" &&
+                  !UpdateService.TryParseNormalizedVersion("2.4.2-beta.1", out _) &&
+                  !UpdateService.TryParseNormalizedVersion("invalid", out _),
+                "UpdateService.TryParseNormalizedVersion strips +metadata, preserves non-zero revision, and rejects prerelease/invalid tags");
+
+            var resolvedAsmVer = UpdateService.ResolveCurrentVersion(typeof(UpdateService).Assembly);
+            Check(resolvedAsmVer.Major >= 1 && resolvedAsmVer.Revision == -1,
+                "UpdateService.ResolveCurrentVersion reads normalized version from assembly metadata");
+
             string psChecksums = """
                 Algorithm : SHA256
                 Hash      : 67D1CA0BF4873FC28EE4BD3DC64AF5BB28B4C4EE8D21086D888D9B954AF5C3DA

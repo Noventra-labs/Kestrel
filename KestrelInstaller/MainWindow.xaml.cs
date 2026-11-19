@@ -27,10 +27,28 @@ namespace KestrelInstaller
         private const string UninstallRegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Kestrel_NoventraLabs";
         private const string LegacyUninstallRegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Beam_NoventraLabs";
         private const string RunRegKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private static readonly string InstallerVersion = ResolveInstallerVersion();
+
+        private static string ResolveInstallerVersion()
+        {
+            var asm = typeof(MainWindow).Assembly;
+            string? info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrWhiteSpace(info))
+            {
+                string clean = info.Trim().TrimStart('v', 'V');
+                int plusIdx = clean.IndexOf('+');
+                if (plusIdx >= 0) clean = clean[..plusIdx];
+                if (clean.Length > 0) return clean;
+            }
+            var v = asm.GetName().Version;
+            if (v == null) return "0.0.0";
+            return v.Revision > 0 ? v.ToString(4) : v.ToString(3);
+        }
 
         public MainWindow(bool isUninstall, bool isSilent)
         {
             InitializeComponent();
+            TxtInstallerVersion.Text = $"v{InstallerVersion}";
             _isUninstallMode = isUninstall;
             _isSilentMode = isSilent;
 
@@ -350,7 +368,7 @@ namespace KestrelInstaller
                         {
                             unKey.SetValue("DisplayName", "Kestrel", RegistryValueKind.String);
                             unKey.SetValue("Publisher", "Noventra-Labs", RegistryValueKind.String);
-                            unKey.SetValue("DisplayVersion", "2.4.1", RegistryValueKind.String);
+                            unKey.SetValue("DisplayVersion", InstallerVersion, RegistryValueKind.String);
                             unKey.SetValue("DisplayIcon", targetIco, RegistryValueKind.String);
                             unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                             unKey.SetValue("UninstallString", $"\"{uninstallerPath}\" --uninstall", RegistryValueKind.String);

@@ -10,9 +10,9 @@
     <AssemblyName>Kestrel</AssemblyName>
     <RootNamespace>Kestrel</RootNamespace>
     <ApplicationIcon>kestrel.ico</ApplicationIcon>
-    <Version>2.4.1</Version>
-    <FileVersion>2.4.1.0</FileVersion>
-    <AssemblyVersion>2.4.1.0</AssemblyVersion>
+    <Version>2.4.2</Version>
+    <FileVersion>2.4.2.0</FileVersion>
+    <AssemblyVersion>2.4.2.0</AssemblyVersion>
     <Company>Noventra-Labs</Company>
     <Authors>Noventra-Labs</Authors>
     <Product>Kestrel</Product>

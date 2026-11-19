@@ -66,6 +66,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
+          $versionArgs = @()
+          if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') {
+            $tagVer = $Matches[1]
+            $versionArgs = @("-p:Version=$tagVer", "-p:FileVersion=$tagVer.0", "-p:AssemblyVersion=$tagVer.0")
+          }
+
           dotnet publish Kestrel/Kestrel.csproj `
             -c Release `
             -r win-x64 `
@@ -75,6 +81,7 @@ jobs:
             -p:EnableCompressionInSingleFile=true `
             -p:DebugType=None `
             -p:DebugSymbols=false `
+            @versionArgs `
             -o Kestrel/publish
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -89,6 +96,7 @@ jobs:
             -p:EnableCompressionInSingleFile=true `
             -p:DebugType=None `
             -p:DebugSymbols=false `
+            @versionArgs `
             -o KestrelInstaller/publish
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
