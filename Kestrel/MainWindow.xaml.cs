@@ -12,7 +12,6 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 using Kestrel.Interop;
@@ -47,10 +46,6 @@ namespace Kestrel
         private bool _isRealClose = false;
         private bool _shownTrayHintOnce = false;
         private bool _isLoadingSettingsUi = false;
-        private bool _webViewInitialized = false;
-        private Microsoft.Web.WebView2.Wpf.WebView2? GeminiWebView;
-        private DispatcherTimer? _webViewTeardownTimer;
-        private bool _isGeminiWebModeActive = true;
         private DateTime _ignoreDeactivateUntil = DateTime.MinValue;
         private CancellationTokenSource? _aiCts;
         private readonly List<ChatMessage> _apiConversation = new();
@@ -68,10 +63,14 @@ namespace Kestrel
         private DispatcherTimer? _watchdogTimer;
         private DispatcherTimer? _autoMemReductTimer;
         private KestrelSettings _settings = new();
+        private readonly string? _updatedFromVersion;
+        private CancellationTokenSource? _updateCts;
+        private bool _isRestartingForUpdate;
 
-        public MainWindow()
+        public MainWindow(string? updatedFromVersion = null)
         {
             InitializeComponent();
+            _updatedFromVersion = updatedFromVersion;
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
         }
@@ -187,6 +186,7 @@ namespace Kestrel
         private void OnSettingsChanged(KestrelSettings updated)
         {
             _settings = updated;
+            ApplyAppearanceSettings(updated);
             if (_keyboardHook != null)
             {
                 _keyboardHook.EnableStartKeyTrigger = updated.TriggerOnStartKey;
@@ -207,6 +207,7 @@ namespace Kestrel
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            ApplyAppearanceSettings(_settings);
             if (_settings.EnableFileSearch)
             {
                 FileSearchService.StartBackgroundIndexing();
@@ -242,6 +243,16 @@ namespace Kestrel
 
             SearchBox.Focus();
             Keyboard.Focus(SearchBox);
+
+            if (!string.IsNullOrWhiteSpace(_updatedFromVersion))
+            {
+                string ver = _updatedFromVersion;
+                _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    ToastNotification.Show($"✓ Updated to Kestrel v{ver}!");
+                    ShootConfetti();
+                }));
+            }
         }
 
         private void RebuildBuiltInCommands()
@@ -252,7 +263,7 @@ namespace Kestrel
                 openFileSearchView: () => SwitchMode(LauncherMode.FileSearch),
                 openSettingsView: OpenSettingsOverlay,
                 triggerConfetti: ShootConfetti,
-                openGeminiChat: (webMode, prompt) => OpenGeminiChatOverlay(webMode, prompt),
+                openGeminiChat: prompt => OpenGeminiChatOverlay(prompt),
                 openMemoryStudioView: () => SwitchMode(LauncherMode.MemoryReduct),
                 executeMemoryProfile: (profile, promptElevation) => _ = RunMemoryCleanAsync(profile, promptElevation),
                 openPortInspectorView: () => OpenPortInspector(string.Empty),
@@ -346,11 +357,11 @@ namespace Kestrel
                 };
                 openItem.Click += (s, e) => Dispatcher.Invoke(Summon);
 
-                var geminiItem = new Forms.ToolStripMenuItem("Embedded Gemini Chat")
+                var geminiItem = new Forms.ToolStripMenuItem("AI Assistant Chat")
                 {
                     ShortcutKeyDisplayString = "Tab"
                 };
-                geminiItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, ""); });
+                geminiItem.Click += (s, e) => Dispatcher.Invoke(() => { Summon(); OpenGeminiChatOverlay(""); });
 
                 var fileItem = new Forms.ToolStripMenuItem("Search Local Files")
                 {
@@ -416,7 +427,7 @@ namespace Kestrel
             if (_isRealClose) return;
             if (DateTime.UtcNow < _ignoreDeactivateUntil) return;
 
-            // Do not auto-hide if focus is inside our own process or child WebView2 HWND
+            // Do not auto-hide if focus is inside our own process or an owned child HWND
             var helper = new WindowInteropHelper(this);
             if (DwmApi.IsForegroundOwnedByKestrelOrChild(helper.Handle))
                 return;
@@ -450,7 +461,6 @@ namespace Kestrel
             SystemEvents.PowerModeChanged -= OnSystemPowerOrSessionChanged;
             SystemEvents.SessionSwitch -= OnSystemPowerOrSessionChanged;
             ClipboardService.ShutdownListener();
-            TeardownWebView2();
             _notifyIcon?.Dispose();
             _keyboardHook?.Dispose();
             _source?.RemoveHook(HwndHook);
@@ -459,8 +469,11 @@ namespace Kestrel
         public void CloseForReal()
         {
             _isRealClose = true;
+            if (_isUpdating && !_isRestartingForUpdate)
+            {
+                try { _updateCts?.Cancel(); } catch { }
+            }
             _watchdogTimer?.Stop();
-            TeardownWebView2();
             ClipboardService.ShutdownListener();
             _notifyIcon?.Dispose();
             _keyboardHook?.Dispose();
@@ -471,14 +484,6 @@ namespace Kestrel
         {
             if (!IsVisible) return;
 
-            // Always collapse WebView2 HWND before hiding so it never holds GPU/hit-test resources
-            if (GeminiWebView != null)
-            {
-                GeminiWebView.Visibility = Visibility.Collapsed;
-                try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
-                StartWebViewTeardownTimer();
-            }
-            GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
             ActionsOverlay.Visibility = Visibility.Collapsed;
             SettingsOverlay.Visibility = Visibility.Collapsed;
@@ -879,6 +884,12 @@ namespace Kestrel
                 });
             }
 
+            var quickItems = SystemCommandsService.GetQuickOperationItems(query, OpenFileSearchWithQuery);
+            if (quickItems.Count > 0)
+            {
+                list.AddRange(quickItems);
+            }
+
             var pool = new List<LauncherItem>(_builtInCommands.Count + _allApps.Count);
             pool.AddRange(_builtInCommands);
             pool.AddRange(_allApps);
@@ -898,6 +909,8 @@ namespace Kestrel
             }
             else
             {
+                bool isExplicitFileQuery = QuickOperationsService.TryParseFileSearchQuery(query, out string explicitFileTerm);
+
                 // Offload ranking and file searching to background Task to keep UI thread completely responsive (<5ms)
                 Task.Run(() =>
                 {
@@ -906,18 +919,35 @@ namespace Kestrel
                     var ranked = SearchEngine.RankAndFilter(pool, query, 40);
                     if (token.IsCancellationRequested) return;
 
-                    var fileMatches = (cfg.EnableFileSearch && query.Length >= 2 && _activeCategoryFilter == "All")
-                        ? FileSearchService.SearchFiles(query, 6)
-                        : null;
+                    List<LauncherItem>? fileMatches = null;
+                    if (cfg.EnableFileSearch && _activeCategoryFilter == "All")
+                    {
+                        if (isExplicitFileQuery && !string.IsNullOrWhiteSpace(explicitFileTerm))
+                        {
+                            fileMatches = FileSearchService.SearchFiles(explicitFileTerm, 12);
+                        }
+                        else if (query.Length >= 2)
+                        {
+                            fileMatches = FileSearchService.SearchFiles(query, 6);
+                        }
+                    }
                     if (token.IsCancellationRequested) return;
 
-                    var webItems = SystemCommandsService.GetWebFallbackItems(query, (webMode, p) => OpenGeminiChatOverlay(webMode, p));
+                    var webItems = SystemCommandsService.GetWebFallbackItems(query, p => OpenGeminiChatOverlay(p));
                     if (token.IsCancellationRequested) return;
 
                     var combined = new List<LauncherItem>(list.Count + ranked.Count + (fileMatches?.Count ?? 0) + webItems.Count);
                     combined.AddRange(list);
-                    combined.AddRange(ranked);
-                    if (fileMatches != null) combined.AddRange(fileMatches);
+                    if (isExplicitFileQuery && fileMatches != null)
+                    {
+                        combined.AddRange(fileMatches);
+                        combined.AddRange(ranked);
+                    }
+                    else
+                    {
+                        combined.AddRange(ranked);
+                        if (fileMatches != null) combined.AddRange(fileMatches);
+                    }
                     combined.AddRange(webItems);
 
                     Dispatcher.InvokeAsync(() =>
@@ -927,6 +957,16 @@ namespace Kestrel
                         BindResults();
                     }, DispatcherPriority.Normal);
                 }, token);
+            }
+        }
+
+        private void OpenFileSearchWithQuery(string initialQuery)
+        {
+            SwitchMode(LauncherMode.FileSearch);
+            if (!string.IsNullOrWhiteSpace(initialQuery))
+            {
+                SearchBox.Text = initialQuery;
+                SearchBox.CaretIndex = initialQuery.Length;
             }
         }
 
@@ -1877,7 +1917,7 @@ namespace Kestrel
             else if (e.Key == Key.Tab && _settings.EnableAiFeatures)
             {
                 e.Handled = true;
-                OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, SearchBox.Text.Trim());
+                OpenGeminiChatOverlay(SearchBox.Text.Trim());
             }
             else if (!SearchBox.IsKeyboardFocused)
             {
@@ -2072,10 +2112,10 @@ namespace Kestrel
             {
                 actions.Add(new ActionItem
                 {
-                    Title = "Open Gemini Chat",
+                    Title = "Open AI Assistant",
                     ShortcutHint = "Tab",
                     Icon = iconAi,
-                    Execute = () => OpenGeminiChatOverlay(_settings.UseEmbeddedGeminiWeb, SearchBox.Text.Trim())
+                    Execute = () => OpenGeminiChatOverlay(SearchBox.Text.Trim())
                 });
             }
 
@@ -2149,14 +2189,6 @@ namespace Kestrel
 
         private void OpenSettingsOverlay()
         {
-            // Ensure WebView2 is collapsed while viewing Settings so its native HWND doesn't overlap
-            if (GeminiWebView != null)
-            {
-                GeminiWebView.Visibility = Visibility.Collapsed;
-                try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
-                StartWebViewTeardownTimer();
-            }
-            GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
             LauncherView.Visibility = Visibility.Collapsed;
 
@@ -2169,6 +2201,13 @@ namespace Kestrel
             ChkHideOutside.IsChecked = _settings.HideOnClickOutside;
             ChkToastNotifications.IsChecked = _settings.EnableToastNotifications;
             ChkTrimMemory.IsChecked = _settings.TrimMemoryOnHide;
+
+            // Tab 2: Appearance & Customization
+            double opacity = ThemeAppearance.ClampOpacity(_settings.BackgroundOpacity);
+            SliderBgOpacity.Value = opacity;
+            TxtOpacityValue.Text = $"{Math.Round(opacity * 100):0}%";
+            TxtThemeHex.Text = ThemeAppearance.NormalizeHexColor(_settings.ThemeAccentColor);
+            RefreshThemeSwatchesUi();
 
             // Tab 2: Modules & Extensions
             ChkEnableAi.IsChecked = _settings.EnableAiFeatures;
@@ -2257,8 +2296,8 @@ namespace Kestrel
 
         private void SwitchToSettingsTab(string tabName)
         {
-            var tabBorders = new[] { SetTabGeneral, SetTabModules, SetTabAi, SetTabData };
-            var tabTexts = new[] { SetTabGeneralTxt, SetTabModulesTxt, SetTabAiTxt, SetTabDataTxt };
+            var tabBorders = new[] { SetTabGeneral, SetTabAppearance, SetTabModules, SetTabAi, SetTabData };
+            var tabTexts = new[] { SetTabGeneralTxt, SetTabAppearanceTxt, SetTabModulesTxt, SetTabAiTxt, SetTabDataTxt };
 
             for (int i = 0; i < tabBorders.Length; i++)
             {
@@ -2276,6 +2315,7 @@ namespace Kestrel
             }
 
             SettingsTabGeneralPanel.Visibility = tabName == "General" ? Visibility.Visible : Visibility.Collapsed;
+            SettingsTabAppearancePanel.Visibility = tabName == "Appearance" ? Visibility.Visible : Visibility.Collapsed;
             SettingsTabModulesPanel.Visibility = tabName == "Modules" ? Visibility.Visible : Visibility.Collapsed;
             SettingsTabAiPanel.Visibility = tabName == "AI" ? Visibility.Visible : Visibility.Collapsed;
             SettingsTabDataPanel.Visibility = tabName == "Data" ? Visibility.Visible : Visibility.Collapsed;
@@ -2284,6 +2324,110 @@ namespace Kestrel
             {
                 RefreshIndexTelemetryText();
             }
+        }
+
+        private void ApplyAppearanceSettings(KestrelSettings settings)
+        {
+            string hex = ThemeAppearance.NormalizeHexColor(settings.ThemeAccentColor);
+            var (r, g, b) = ThemeAppearance.ParseRgb(hex);
+            var accent = System.Windows.Media.Color.FromRgb(r, g, b);
+            var soft = System.Windows.Media.Color.FromRgb(
+                (byte)Math.Min(255, r + 45),
+                (byte)Math.Min(255, g + 45),
+                (byte)Math.Min(255, b + 45));
+
+            Resources["BrandRed"] = new SolidColorBrush(accent);
+            Resources["BrandAccentTint"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x24, r, g, b));
+            Resources["BrandAccentBorder"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x55, r, g, b));
+            Resources["BrandAccentSelection"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x44, r, g, b));
+            Resources["BrandAccentSoft"] = new SolidColorBrush(soft);
+
+            var (a1, a2, a3) = ThemeAppearance.ComputeShellAlphas(settings.BackgroundOpacity);
+            var shellBrush = new LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0, 0),
+                EndPoint = new System.Windows.Point(1, 1)
+            };
+            shellBrush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(a1, 9, 12, 18), 0));
+            shellBrush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(a2, 7, 9, 14), 0.55));
+            shellBrush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(a3, 5, 7, 11), 1));
+            MainShellBorder.Background = shellBrush;
+        }
+
+        private void RefreshThemeSwatchesUi()
+        {
+            if (ThemeSwatchesPanel == null) return;
+            string activeHex = ThemeAppearance.NormalizeHexColor(_settings.ThemeAccentColor);
+            foreach (var child in ThemeSwatchesPanel.Children)
+            {
+                if (child is Border swatch && swatch.Tag is string tagHex)
+                {
+                    bool selected = string.Equals(
+                        ThemeAppearance.NormalizeHexColor(tagHex),
+                        activeHex,
+                        StringComparison.OrdinalIgnoreCase);
+                    swatch.BorderBrush = selected
+                        ? System.Windows.Media.Brushes.White
+                        : new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 255, 255, 255));
+                }
+            }
+        }
+
+        private void SliderBgOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!IsLoaded || _isLoadingSettingsUi || TxtOpacityValue == null || MainShellBorder == null)
+                return;
+
+            double opacity = ThemeAppearance.ClampOpacity(e.NewValue);
+            TxtOpacityValue.Text = $"{Math.Round(opacity * 100):0}%";
+            _settings.BackgroundOpacity = opacity;
+            ApplyAppearanceSettings(_settings);
+            _settings.Save(notify: false);
+            SettingsSavedNotice.Text = "Saved";
+        }
+
+        private void ThemeSwatch_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not Border swatch || swatch.Tag is not string hex) return;
+            string normalized = ThemeAppearance.NormalizeHexColor(hex);
+            _settings.ThemeAccentColor = normalized;
+            TxtThemeHex.Text = normalized;
+            RefreshThemeSwatchesUi();
+            ApplyAppearanceSettings(_settings);
+            _settings.Save(notify: true);
+            SettingsSavedNotice.Text = "Saved";
+        }
+
+        private void ApplyCustomThemeHex_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!ThemeAppearance.TryNormalizeHexColor(TxtThemeHex.Text, out string normalized))
+            {
+                ToastNotification.Show("Enter a valid hex color (e.g. #3B82F6)");
+                return;
+            }
+
+            _settings.ThemeAccentColor = normalized;
+            TxtThemeHex.Text = normalized;
+            RefreshThemeSwatchesUi();
+            ApplyAppearanceSettings(_settings);
+            _settings.Save(notify: true);
+            SettingsSavedNotice.Text = "Saved";
+        }
+
+        private void ResetAppearance_Click(object sender, MouseButtonEventArgs e)
+        {
+            _isLoadingSettingsUi = true;
+            _settings.BackgroundOpacity = ThemeAppearance.DefaultOpacity;
+            _settings.ThemeAccentColor = ThemeAppearance.DefaultAccentHex;
+            SliderBgOpacity.Value = ThemeAppearance.DefaultOpacity;
+            TxtOpacityValue.Text = $"{Math.Round(ThemeAppearance.DefaultOpacity * 100):0}%";
+            TxtThemeHex.Text = ThemeAppearance.DefaultAccentHex;
+            _isLoadingSettingsUi = false;
+
+            RefreshThemeSwatchesUi();
+            ApplyAppearanceSettings(_settings);
+            _settings.Save(notify: true);
+            SettingsSavedNotice.Text = "Appearance reset to default";
         }
 
         private void SettingToggle_Changed(object sender, RoutedEventArgs e)
@@ -2303,6 +2447,12 @@ namespace Kestrel
             _settings.HideOnClickOutside = ChkHideOutside.IsChecked == true;
             _settings.EnableToastNotifications = ChkToastNotifications.IsChecked == true;
             _settings.TrimMemoryOnHide = ChkTrimMemory.IsChecked == true;
+
+            _settings.BackgroundOpacity = ThemeAppearance.ClampOpacity(SliderBgOpacity.Value);
+            if (ThemeAppearance.TryNormalizeHexColor(TxtThemeHex.Text, out string customHex))
+            {
+                _settings.ThemeAccentColor = customHex;
+            }
 
             _settings.EnableAiFeatures = ChkEnableAi.IsChecked == true;
             _settings.EnableFileSearch = ChkEnableFileSearch.IsChecked == true;
@@ -2473,23 +2623,143 @@ namespace Kestrel
 
         private void UpdateBadge_Click(object sender, MouseButtonEventArgs e)
         {
-            UpdateService.OpenReleasePage();
+            OpenSettingsOverlay();
+            SwitchToSettingsTab("General");
+            SettingsScrollViewer.ScrollToBottom();
+            if (!_isUpdating)
+            {
+                CheckUpdates_Click(sender, e);
+            }
+        }
+
+        private void CancelUpdate_Click(object sender, MouseButtonEventArgs e)
+        {
+            _updateCts?.Cancel();
+        }
+
+        private bool _isUpdating;
+
+        private void ResetUpdateProgressUi()
+        {
+            UpdateProgressContainer.Visibility = Visibility.Collapsed;
+            BtnCancelUpdate.Visibility = Visibility.Collapsed;
+            UpdateProgressBar.IsIndeterminate = false;
+            UpdateProgressBar.Value = 0;
+            TxtUpdateStage.Text = "Preparing update...";
+            TxtUpdateBytes.Text = string.Empty;
         }
 
         private async void CheckUpdates_Click(object sender, MouseButtonEventArgs e)
         {
+            if (_isUpdating) return;
+
             BtnCheckUpdatesText.Text = "Checking...";
             var info = await UpdateService.CheckForUpdatesAsync(force: true);
             if (info != null && info.IsNewer)
             {
                 TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
-                BtnCheckUpdatesText.Text = "Update Now";
                 UpdateBadge.Visibility = Visibility.Visible;
                 UpdateVersionText.Text = info.LatestTag;
-                UpdateService.OpenReleasePage(string.IsNullOrEmpty(info.InstallerUrl) ? info.HtmlUrl : info.InstallerUrl);
+
+                if (UpdateService.IsStandaloneKestrelExe() && !string.IsNullOrWhiteSpace(info.ExecutableUrl))
+                {
+                    _isUpdating = true;
+                    _updateCts = new CancellationTokenSource();
+                    _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(2);
+
+                    UpdateProgressContainer.Visibility = Visibility.Visible;
+                    BtnCancelUpdate.Visibility = Visibility.Visible;
+                    UpdateProgressBar.IsIndeterminate = info.ExecutableSizeBytes <= 0;
+                    UpdateProgressBar.Value = 0;
+
+                    string sizeLabel = info.ExecutableSizeBytes > 0
+                        ? $" ({info.ExecutableSizeBytes / (1024.0 * 1024.0):F1} MB)"
+                        : "";
+                    TxtUpdateStatus.Text = $"Downloading {info.LatestTag}{sizeLabel}...";
+                    TxtUpdateStage.Text = $"Downloading {info.LatestTag}...";
+                    TxtUpdateBytes.Text = info.ExecutableSizeBytes > 0
+                        ? $"0.0 MB / {info.ExecutableSizeBytes / (1024.0 * 1024.0):F1} MB (0%)"
+                        : "0%";
+                    BtnCheckUpdatesText.Text = "0%";
+
+                    var progress = new Progress<UpdateProgressReport>(report =>
+                    {
+                        switch (report.Stage)
+                        {
+                            case UpdateStage.Downloading:
+                                UpdateProgressBar.IsIndeterminate = report.TotalBytes <= 0;
+                                UpdateProgressBar.Value = report.Percentage;
+                                BtnCheckUpdatesText.Text = report.TotalBytes > 0 ? $"{report.Percentage}%" : "...";
+                                TxtUpdateStage.Text = $"Downloading {info.LatestTag}...";
+                                TxtUpdateBytes.Text = report.TotalBytes > 0
+                                    ? $"{report.BytesReceived / (1024.0 * 1024.0):F1} MB / {report.TotalBytes / (1024.0 * 1024.0):F1} MB ({report.Percentage}%)"
+                                    : $"{report.BytesReceived / (1024.0 * 1024.0):F1} MB";
+                                break;
+
+                            case UpdateStage.Verifying:
+                                UpdateProgressBar.IsIndeterminate = true;
+                                BtnCancelUpdate.Visibility = Visibility.Collapsed;
+                                BtnCheckUpdatesText.Text = "Verifying...";
+                                TxtUpdateStage.Text = "Verifying SHA-256 integrity...";
+                                TxtUpdateBytes.Text = "100%";
+                                break;
+
+                            case UpdateStage.Installing:
+                                UpdateProgressBar.IsIndeterminate = true;
+                                BtnCancelUpdate.Visibility = Visibility.Collapsed;
+                                BtnCheckUpdatesText.Text = "Restarting...";
+                                TxtUpdateStage.Text = "Installing & restarting Kestrel...";
+                                TxtUpdateBytes.Text = "";
+                                _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(15);
+                                break;
+                        }
+                    });
+
+                    try
+                    {
+                        var result = await UpdateService.DownloadAndApplyUpdateAsync(info, progress, _updateCts.Token);
+
+                        if (result.Started)
+                        {
+                            _isRestartingForUpdate = true;
+                            TxtUpdateStatus.Text = $"Restarting to {info.LatestTag}...";
+                            BtnCheckUpdatesText.Text = "Restarting...";
+                            CloseForReal();
+                            System.Windows.Application.Current.Shutdown();
+                            return;
+                        }
+
+                        ResetUpdateProgressUi();
+                        if (result.Cancelled)
+                        {
+                            TxtUpdateStatus.Text = $"Update available: {info.LatestTag}";
+                            BtnCheckUpdatesText.Text = "Update Now";
+                            ToastNotification.Show("Update cancelled");
+                        }
+                        else
+                        {
+                            TxtUpdateStatus.Text = $"Update failed: {result.ErrorMessage ?? "Unknown error"}";
+                            BtnCheckUpdatesText.Text = "Retry Update";
+                            ToastNotification.Show("Auto-update failed — opening download in browser");
+                            UpdateService.OpenReleasePage(UpdateService.ResolveDownloadTargetUrl(info));
+                        }
+                    }
+                    finally
+                    {
+                        _updateCts.Dispose();
+                        _updateCts = null;
+                        _isUpdating = false;
+                    }
+                }
+                else
+                {
+                    BtnCheckUpdatesText.Text = "Update Now";
+                    UpdateService.OpenReleasePage(UpdateService.ResolveDownloadTargetUrl(info));
+                }
             }
             else
             {
+                ResetUpdateProgressUi();
                 TxtUpdateStatus.Text = $"Kestrel is up to date (v{UpdateService.CurrentVersion})";
                 BtnCheckUpdatesText.Text = "Up to Date ✓";
                 ToastNotification.Show("✓ Kestrel is running the latest version");
@@ -2549,41 +2819,32 @@ namespace Kestrel
 
         #endregion
 
-        #region Embedded Google Gemini Chat
+        #region AI Assistant Chat
 
         private void QuickAiBadge_Click(object sender, MouseButtonEventArgs e)
         {
-            OpenGeminiChatOverlay(true, SearchBox.Text.Trim());
+            OpenGeminiChatOverlay(SearchBox.Text.Trim());
         }
 
         private void NewGeminiChat_Click(object sender, MouseButtonEventArgs e)
         {
-            if (_isGeminiWebModeActive)
-            {
-                if (_webViewInitialized && GeminiWebView?.CoreWebView2 != null)
-                {
-                    GeminiWebView.CoreWebView2.Navigate("https://gemini.google.com/app");
-                }
-            }
-            else
-            {
-                _aiCts?.Cancel();
-                _aiCts = null;
-                _apiConversation.Clear();
-                ApiChatHistoryPanel.Children.Clear();
-                AiUserPromptText.Text = "Ask anything...";
-                AiResponseText.Text = "";
-                AiPromptInputBox.Text = "";
-                AiPromptInputBox.Focus();
-            }
+            _aiCts?.Cancel();
+            _aiCts = null;
+            _apiConversation.Clear();
+            ApiChatHistoryPanel.Children.Clear();
+            AiUserPromptText.Text = "Ask anything...";
+            AiResponseText.Text = "";
+            AiPromptInputBox.Text = "";
+            AiPromptInputBox.Focus();
         }
 
-        private void OpenGeminiChatOverlay(bool useWebMode, string promptInput)
+        private async void OpenGeminiChatOverlay(string promptInput)
         {
             SettingsOverlay.Visibility = Visibility.Collapsed;
             ActionsOverlay.Visibility = Visibility.Collapsed;
             LauncherView.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Visible;
+            GeminiApiChatContainer.Visibility = Visibility.Visible;
 
             var cleanedPrompt = promptInput.Trim();
             if (cleanedPrompt.Equals("gemini", StringComparison.OrdinalIgnoreCase) ||
@@ -2601,164 +2862,13 @@ namespace Kestrel
                 cleanedPrompt = cleanedPrompt[7..].Trim();
             }
 
-            SetGeminiOverlayMode(useWebMode, cleanedPrompt);
-        }
+            AiModelTag.Text = string.IsNullOrWhiteSpace(_settings.DefaultAiModel) ? "" : _settings.DefaultAiModel;
+            AiPromptInputBox.Focus();
+            Keyboard.Focus(AiPromptInputBox);
 
-        private async void SetGeminiOverlayMode(bool useWebMode, string initialPrompt)
-        {
-            _isGeminiWebModeActive = useWebMode;
-
-            if (useWebMode)
+            if (!string.IsNullOrWhiteSpace(cleanedPrompt))
             {
-                _webViewTeardownTimer?.Stop();
-                GeminiApiChatContainer.Visibility = Visibility.Collapsed;
-                GeminiWebViewContainer.Visibility = Visibility.Visible;
-                AiModelTag.Text = "";
-                AiStatusText.Text = "Gemini Ready";
-
-                if (!string.IsNullOrWhiteSpace(initialPrompt))
-                {
-                    System.Windows.Clipboard.SetText(initialPrompt);
-                    ToastNotification.Show("✓ Prompt copied — press Ctrl+V in Gemini");
-                }
-
-                await EnsureGeminiWebViewInitializedAsync();
-                if (GeminiWebView != null)
-                {
-                    try { GeminiWebView.CoreWebView2?.Resume(); } catch { }
-                    GeminiWebView.Visibility = Visibility.Visible;
-                    GeminiWebView.Focus();
-                }
-            }
-            else
-            {
-                if (GeminiWebView != null)
-                {
-                    GeminiWebView.Visibility = Visibility.Collapsed;
-                    try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
-                    StartWebViewTeardownTimer();
-                }
-                GeminiWebViewContainer.Visibility = Visibility.Collapsed;
-                GeminiApiChatContainer.Visibility = Visibility.Visible;
-
-                AiModelTag.Text = string.IsNullOrWhiteSpace(_settings.DefaultAiModel) ? "" : _settings.DefaultAiModel;
-                AiPromptInputBox.Focus();
-                Keyboard.Focus(AiPromptInputBox);
-
-                if (!string.IsNullOrWhiteSpace(initialPrompt))
-                {
-                    await StreamApiMessageAsync(initialPrompt);
-                }
-            }
-        }
-
-        private void StartWebViewTeardownTimer()
-        {
-            _webViewTeardownTimer?.Stop();
-            _webViewTeardownTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(60)
-            };
-            _webViewTeardownTimer.Tick += (s, e) =>
-            {
-                _webViewTeardownTimer?.Stop();
-                TeardownWebView2();
-            };
-            _webViewTeardownTimer.Start();
-        }
-
-        private void TeardownWebView2()
-        {
-            _webViewTeardownTimer?.Stop();
-            _webViewTeardownTimer = null;
-            if (GeminiWebView != null)
-            {
-                try
-                {
-                    GeminiWebHostGrid.Children.Remove(GeminiWebView);
-                    GeminiWebView.Dispose();
-                }
-                catch { }
-                GeminiWebView = null;
-                _webViewInitialized = false;
-                App.Log("WebView2 idle teardown: disposed and memory freed.");
-            }
-        }
-
-        private async Task EnsureGeminiWebViewInitializedAsync()
-        {
-            _webViewTeardownTimer?.Stop();
-            if (_webViewInitialized && GeminiWebView?.CoreWebView2 != null)
-            {
-                GeminiWebLoadingText.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            try
-            {
-                GeminiWebLoadingText.Visibility = Visibility.Visible;
-                GeminiWebLoadingText.Text = "Initializing Embedded Google Gemini (WebView2)...";
-
-                if (GeminiWebView == null)
-                {
-                    GeminiWebView = new Microsoft.Web.WebView2.Wpf.WebView2
-                    {
-                        Margin = new Thickness(2),
-                        Visibility = Visibility.Collapsed
-                    };
-                    GeminiWebHostGrid.Children.Add(GeminiWebView);
-                }
-
-                string profileDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Kestrel",
-                    "WebView2Profile");
-
-                Directory.CreateDirectory(profileDir);
-
-                var env = await CoreWebView2Environment.CreateAsync(null, profileDir);
-                await GeminiWebView.EnsureCoreWebView2Async(env);
-
-                GeminiWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
-
-                // Intercept Esc inside WebView2 child HWND via both WPF KeyDown forwarding and DOM capture
-                GeminiWebView.KeyDown += (s, e) =>
-                {
-                    if (e.Key == Key.Escape)
-                    {
-                        e.Handled = true;
-                        CloseAiOverlay();
-                    }
-                };
-
-                if (GeminiWebView.CoreWebView2 != null)
-                {
-                    await GeminiWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
-                        "window.addEventListener('keydown', function(e) { if (e.key === 'Escape') { window.chrome.webview.postMessage('KESTREL_ESC'); } }, true);");
-
-                    GeminiWebView.CoreWebView2.WebMessageReceived += (s, e) =>
-                    {
-                        if (e.TryGetWebMessageAsString() == "KESTREL_ESC")
-                        {
-                            Dispatcher.BeginInvoke(CloseAiOverlay);
-                        }
-                    };
-
-                    GeminiWebView.CoreWebView2.NavigationCompleted += (s, e) =>
-                    {
-                        GeminiWebLoadingText.Visibility = Visibility.Collapsed;
-                    };
-
-                    GeminiWebView.CoreWebView2.Navigate("https://gemini.google.com/app");
-                }
-                _webViewInitialized = true;
-            }
-            catch (Exception ex)
-            {
-                App.Log($"WebView2 init error: {ex}");
-                GeminiWebLoadingText.Text = $"WebView2 Notice: {ex.Message}\nSwitching to Fast API Stream mode...";
-                await Task.Delay(900);
-                SetGeminiOverlayMode(useWebMode: false, initialPrompt: "");
+                await StreamApiMessageAsync(cleanedPrompt);
             }
         }
 
@@ -2894,8 +3004,8 @@ namespace Kestrel
             {
                 if (_aiCts != requestCts) return;
                 AiResponseText.Text = $"⚠️ Fast API Connection Notice:\n{ex.Message}\n\n" +
-                    "Tip: Click '✦ Gemini Web (gemini.google.com)' in the top bar above to chat with Google Gemini directly without needing a backend or API key, or add your Gemini API Key in Settings (Ctrl+,)!";
-                AiStatusText.Text = "Click '✦ Gemini Web' above or configure API Key in Settings";
+                    "Tip: Add your API Key in Settings (Ctrl+,) → AI tab, or verify your Cloud Backend Endpoint.";
+                AiStatusText.Text = "Configure API Key or Cloud Endpoint in Settings (Ctrl+,)";
             }
             finally
             {
@@ -2909,14 +3019,6 @@ namespace Kestrel
         private void CloseAiOverlay()
         {
             _aiCts?.Cancel();
-            // Strictly collapse WebView2 HWND so it never blocks WPF airspace
-            if (GeminiWebView != null)
-            {
-                GeminiWebView.Visibility = Visibility.Collapsed;
-                try { _ = GeminiWebView.CoreWebView2?.TrySuspendAsync(); } catch { }
-                StartWebViewTeardownTimer();
-            }
-            GeminiWebViewContainer.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Collapsed;
             LauncherView.Visibility = Visibility.Visible;
             FocusSearchBox();

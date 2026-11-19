@@ -66,10 +66,11 @@ namespace Kestrel
                 return;
             }
 
-            Log("Kestrel v2.3 process starting...");
+            Log($"Kestrel v{UpdateService.CurrentVersion} process starting...");
 
             bool forceReplace = e.Args.Any(a => a.Equals("--replace", StringComparison.OrdinalIgnoreCase));
             bool startInTray = e.Args.Any(a => a.Equals("--tray", StringComparison.OrdinalIgnoreCase));
+            string? updatedVersion = UpdateService.ParseUpdatedVersionArg(e.Args);
 
             const string mutexName = @"Local\Kestrel.Launcher.SingleInstance";
             _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
@@ -96,6 +97,8 @@ namespace Kestrel
                 }
             }
 
+            _ = Task.Run(() => UpdateService.CleanupPostUpdateArtifacts());
+
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             base.OnStartup(e);
 
@@ -112,7 +115,7 @@ namespace Kestrel
 
             try
             {
-                _mainWindow = new MainWindow();
+                _mainWindow = new MainWindow(updatedVersion);
                 _mainWindow.Show();
 
                 if (startInTray)
@@ -126,7 +129,7 @@ namespace Kestrel
                     _mainWindow.Summon();
                 }
 
-                Log("MainWindow v2.3 initialized and active.");
+                Log($"MainWindow v{UpdateService.CurrentVersion} initialized and active.");
                 EnsureShortcuts();
             }
             catch (Exception ex)

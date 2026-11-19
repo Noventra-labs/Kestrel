@@ -39,7 +39,7 @@ namespace Kestrel.Services
             Action openFileSearchView,
             Action openSettingsView,
             Action triggerConfetti,
-            Action<bool, string> openGeminiChat,
+            Action<string> openGeminiChat,
             Action? openMemoryStudioView = null,
             Action<MemoryCleanProfile, bool>? executeMemoryProfile = null,
             Action? openPortInspectorView = null,
@@ -64,20 +64,20 @@ namespace Kestrel.Services
 
             var commands = new List<LauncherItem>();
 
-            // 1. AI & Embedded Gemini Chat Commands
+            // 1. AI Chat Commands
             if (cfg.EnableAiFeatures)
             {
                 commands.Add(new LauncherItem
                 {
                     Id = "cmd:gemini_chat",
-                    Name = "Gemini Chat",
+                    Name = "AI Assistant Chat",
                     Subtitle = string.Empty,
                     Category = "AI Command",
                     Section = "Commands",
                     ShortcutBadge = "Tab",
                     Icon = iconAi,
                     KeepOpenOnExecute = true,
-                    Action = () => openGeminiChat(true, "")
+                    Action = () => openGeminiChat("")
                 });
 
                 commands.Add(new LauncherItem
@@ -92,7 +92,7 @@ namespace Kestrel.Services
                     Action = () =>
                     {
                         string clip = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : "";
-                        openGeminiChat(false, $"Fix the spelling and grammar of the following text and output only the corrected version:\n\n{clip}");
+                        openGeminiChat($"Fix the spelling and grammar of the following text and output only the corrected version:\n\n{clip}");
                     }
                 });
 
@@ -108,7 +108,7 @@ namespace Kestrel.Services
                     Action = () =>
                     {
                         string clip = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : "";
-                        openGeminiChat(false, $"Summarize the following text into key bullet points:\n\n{clip}");
+                        openGeminiChat($"Summarize the following text into key bullet points:\n\n{clip}");
                     }
                 });
 
@@ -124,7 +124,7 @@ namespace Kestrel.Services
                     Action = () =>
                     {
                         string clip = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : "";
-                        openGeminiChat(false, $"Explain this code clearly and concisely:\n\n{clip}");
+                        openGeminiChat($"Explain this code clearly and concisely:\n\n{clip}");
                     }
                 });
             }
@@ -145,6 +145,40 @@ namespace Kestrel.Services
                     KeepOpenOnExecute = true,
                     Action = openFileSearchView
                 });
+            }
+
+            // 2b. Quick Operations (Incognito / Private Browser Launch)
+            var browsers = QuickOperationsService.DetectInstalledBrowsers();
+            if (browsers.Count > 0)
+            {
+                var primaryBrowser = browsers[0];
+                commands.Add(new LauncherItem
+                {
+                    Id = "cmd:open_incognito",
+                    Name = "Open Incognito Window",
+                    Subtitle = $"{primaryBrowser.Name} • Private browsing",
+                    Category = "Quick Action",
+                    Section = "Commands",
+                    Keywords = "incognito private inprivate anonymous secret browser window " + primaryBrowser.Name.ToLowerInvariant(),
+                    Icon = iconGlobe,
+                    Action = () => LaunchIncognitoWithFeedback(primaryBrowser, null)
+                });
+
+                foreach (var b in browsers.Skip(1))
+                {
+                    var capturedBrowser = b;
+                    commands.Add(new LauncherItem
+                    {
+                        Id = $"cmd:open_incognito_{capturedBrowser.Id}",
+                        Name = $"Open Private Window ({capturedBrowser.Name})",
+                        Subtitle = "Private / incognito browsing",
+                        Category = "Quick Action",
+                        Section = "Commands",
+                        Keywords = $"incognito private inprivate browser {capturedBrowser.Name.ToLowerInvariant()} {capturedBrowser.Id}",
+                        Icon = iconGlobe,
+                        Action = () => LaunchIncognitoWithFeedback(capturedBrowser, null)
+                    });
+                }
             }
 
             // 3. Clipboard History Command
@@ -921,7 +955,70 @@ namespace Kestrel.Services
             return list;
         }
 
-        public static List<LauncherItem> GetWebFallbackItems(string query, Action<bool, string> openGeminiChat)
+        private static void LaunchIncognitoWithFeedback(BrowserInfo browser, string? target)
+        {
+            if (QuickOperationsService.LaunchIncognito(browser, target, out var err))
+            {
+                ToastNotification.Show($"✓ Opened {browser.Name} private window");
+            }
+            else
+            {
+                ToastNotification.Show($"Could not open private window: {err}");
+            }
+        }
+
+        public static List<LauncherItem> GetQuickOperationItems(string query, Action<string> openFileSearchWithQuery)
+        {
+            var list = new List<LauncherItem>();
+            if (string.IsNullOrWhiteSpace(query)) return list;
+
+            if (QuickOperationsService.TryParseIncognitoQuery(query, out string target))
+            {
+                var iconGlobe = IconGenerator.GetSquircleIcon(SquircleTheme.WebCyan, IconGenerator.PathGlobe);
+                var browsers = QuickOperationsService.DetectInstalledBrowsers();
+                foreach (var browser in browsers.Take(3))
+                {
+                    var captured = browser;
+                    list.Add(new LauncherItem
+                    {
+                        Id = $"quick:incognito:{captured.Id}",
+                        Name = string.IsNullOrWhiteSpace(target)
+                            ? $"Open Incognito Window ({captured.Name})"
+                            : $"Open \"{target}\" in {captured.Name} Incognito",
+                        Subtitle = string.IsNullOrWhiteSpace(target)
+                            ? "Launch private browser session"
+                            : "Open directly in private window",
+                        Category = "Quick Action",
+                        ShortcutBadge = "Private",
+                        Icon = iconGlobe,
+                        Action = () => LaunchIncognitoWithFeedback(captured, target)
+                    });
+                }
+            }
+
+            if (KestrelSettings.Current.EnableFileSearch &&
+                QuickOperationsService.TryParseFileSearchQuery(query, out string fileQuery))
+            {
+                var iconSearch = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathSearch);
+                list.Add(new LauncherItem
+                {
+                    Id = "quick:filesearch",
+                    Name = string.IsNullOrWhiteSpace(fileQuery)
+                        ? "Search Local Files"
+                        : $"Search All Files for \"{fileQuery}\"",
+                    Subtitle = "Open dedicated file search view",
+                    Category = "Quick Action",
+                    ShortcutBadge = "Ctrl+F",
+                    Icon = iconSearch,
+                    KeepOpenOnExecute = true,
+                    Action = () => openFileSearchWithQuery(fileQuery)
+                });
+            }
+
+            return list;
+        }
+
+        public static List<LauncherItem> GetWebFallbackItems(string query, Action<string> openGeminiChat)
         {
             if (string.IsNullOrWhiteSpace(query)) return new List<LauncherItem>();
 
@@ -943,7 +1040,7 @@ namespace Kestrel.Services
                     ShortcutBadge = "Tab",
                     Icon = iconAi,
                     KeepOpenOnExecute = true,
-                    Action = () => openGeminiChat(cfg.UseEmbeddedGeminiWeb, query)
+                    Action = () => openGeminiChat(query)
                 });
             }
 

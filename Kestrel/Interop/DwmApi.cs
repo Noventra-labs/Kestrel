@@ -249,8 +249,7 @@ namespace Kestrel.Interop
         }
 
         /// <summary>
-        /// Checks whether the current foreground HWND belongs to Kestrel or its hosted child WebView2 HWND.
-        /// Prevents false deactivation when clicking inside the embedded Gemini WebView2 control.
+        /// Checks whether the current foreground HWND belongs to Kestrel or an owned child window.
         /// </summary>
         public static int GetWindowProcessId(IntPtr hwnd)
         {

@@ -1,7 +1,6 @@
 <Window x:Class="Kestrel.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Kestrel"
         Width="680" Height="452"
         WindowStyle="None"
@@ -27,6 +26,10 @@
 
     <Window.Resources>
         <SolidColorBrush x:Key="BrandRed" Color="#FF6363" />
+        <SolidColorBrush x:Key="BrandAccentTint" Color="#24FF6363" />
+        <SolidColorBrush x:Key="BrandAccentBorder" Color="#55FF6363" />
+        <SolidColorBrush x:Key="BrandAccentSelection" Color="#44FF6363" />
+        <SolidColorBrush x:Key="BrandAccentSoft" Color="#FF9494" />
         <SolidColorBrush x:Key="TextPrimary" Color="#F8FAFC" />
         <SolidColorBrush x:Key="TextSecondary" Color="#94A3B8" />
         <SolidColorBrush x:Key="TextMuted" Color="#64748B" />
@@ -100,8 +103,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Track" Property="Background" Value="#FF6363" />
-                                <Setter TargetName="Track" Property="BorderBrush" Value="#FF8585" />
+                                <Setter TargetName="Track" Property="Background" Value="{DynamicResource BrandRed}" />
+                                <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource BrandAccentBorder}" />
                                 <Setter TargetName="Knob" Property="Fill" Value="#FFFFFF" />
                                 <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right" />
                             </Trigger>
@@ -135,7 +138,7 @@
                                 <Border x:Name="ActiveBar"
                                         Width="2.5" Height="18"
                                         CornerRadius="1.5"
-                                        Background="#FF6363"
+                                        Background="{DynamicResource BrandRed}"
                                         HorizontalAlignment="Left"
                                         VerticalAlignment="Center"
                                         Margin="-6,0,0,0"
@@ -225,7 +228,7 @@
                               Margin="0,0,14,0"
                               Width="16" Height="16"
                               Stretch="Uniform"
-                              Fill="{StaticResource BrandRed}"
+                              Fill="{DynamicResource BrandRed}"
                               Cursor="Hand"
                               MouseLeftButtonDown="BrandLogo_Click"
                               Data="M 0,10 L 10,0 L 20,10 L 10,20 Z M 4.5,10 L 10,4.5 L 15.5,10 L 10,15.5 Z" />
@@ -234,8 +237,8 @@
                         <Border x:Name="ActiveModePill"
                                 Grid.Column="1"
                                 Visibility="Collapsed"
-                                Background="#24FF6363"
-                                BorderBrush="#55FF6363"
+                                Background="{DynamicResource BrandAccentTint}"
+                                BorderBrush="{DynamicResource BrandAccentBorder}"
                                 BorderThickness="1"
                                 CornerRadius="7"
                                 Padding="8,3"
@@ -243,7 +246,7 @@
                                 VerticalAlignment="Center">
                             <TextBlock x:Name="ActiveModeText"
                                        Text="Clipboard"
-                                       Foreground="#FF9494"
+                                       Foreground="{DynamicResource BrandAccentSoft}"
                                        FontSize="11.5"
                                        FontWeight="SemiBold" />
                         </Border>
@@ -262,8 +265,8 @@
                                      BorderThickness="0"
                                      FocusVisualStyle="{x:Null}"
                                      Foreground="{StaticResource TextPrimary}"
-                                     CaretBrush="{StaticResource BrandRed}"
-                                     SelectionBrush="#44FF6363"
+                                     CaretBrush="{DynamicResource BrandRed}"
+                                     SelectionBrush="{DynamicResource BrandAccentSelection}"
                                      FontSize="16.5"
                                      FontWeight="Normal"
                                      VerticalAlignment="Center"
@@ -477,7 +480,7 @@
 
                         <!-- Left Status -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="6" Height="6" Fill="{StaticResource BrandRed}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource BrandRed}" Margin="0,0,8,0" VerticalAlignment="Center" />
                             <TextBlock x:Name="StatusText"
                                        Text="Ready"
                                        Foreground="{StaticResource TextSecondary}"
@@ -573,7 +576,7 @@
                         <Border Grid.Row="0" Background="#07FFFFFF" BorderThickness="0,0,0,1" BorderBrush="#14FFFFFF" Padding="14,0">
                             <Grid VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="6" Height="6" Fill="{StaticResource BrandRed}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <Ellipse Width="6" Height="6" Fill="{DynamicResource BrandRed}" Margin="0,0,8,0" VerticalAlignment="Center" />
                                     <TextBlock Text="Actions" Foreground="#CBD5E1" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </StackPanel>
                                 <TextBlock Text="Esc" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
@@ -645,8 +648,8 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Path VerticalAlignment="Center" Margin="0,0,10,0" Width="13" Height="13" Stretch="Uniform" Fill="{StaticResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
-                            <TextBlock Text="Gemini" Foreground="{StaticResource TextPrimary}" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Path VerticalAlignment="Center" Margin="0,0,10,0" Width="13" Height="13" Stretch="Uniform" Fill="{DynamicResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
+                            <TextBlock Text="AI Assistant" Foreground="{StaticResource TextPrimary}" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <TextBlock x:Name="AiModelTag" Text="" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
 
@@ -663,26 +666,8 @@
 
                 <!-- Body Area -->
                 <Grid Grid.Row="1">
-                    <!-- Embedded Google Gemini Web App -->
-                    <Border x:Name="GeminiWebViewContainer"
-                            Visibility="Collapsed"
-                            Margin="10,8,10,8"
-                            CornerRadius="12"
-                            Background="#680F1117"
-                            BorderBrush="#22FFFFFF"
-                            BorderThickness="1">
-                        <Grid x:Name="GeminiWebHostGrid">
-                            <TextBlock x:Name="GeminiWebLoadingText"
-                                       Text="Loading Gemini..."
-                                       Foreground="#94A3B8"
-                                       FontSize="13"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Grid>
-                    </Border>
-
                     <!-- Native AI Streaming View -->
-                    <Grid x:Name="GeminiApiChatContainer" Visibility="Collapsed">
+                    <Grid x:Name="GeminiApiChatContainer" Visibility="Visible">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
@@ -715,12 +700,12 @@
                                              BorderThickness="0"
                                              FocusVisualStyle="{x:Null}"
                                              Foreground="#FFFFFF"
-                                             CaretBrush="#FF6363"
+                                             CaretBrush="{DynamicResource BrandRed}"
                                              FontSize="13"
                                              KeyDown="AiPromptInputBox_KeyDown" />
                                 </Border>
 
-                                <Border Grid.Column="1" Background="#FF6363" CornerRadius="8" Padding="14,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SendApiChatPrompt_Click">
+                                <Border Grid.Column="1" Background="{DynamicResource BrandRed}" CornerRadius="8" Padding="14,6" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="SendApiChatPrompt_Click">
                                     <TextBlock Text="Send" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 </Border>
 
@@ -763,22 +748,25 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Path VerticalAlignment="Center" Margin="0,0,9,0" Width="12" Height="12" Stretch="Uniform" Fill="{StaticResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
+                            <Path VerticalAlignment="Center" Margin="0,0,9,0" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource BrandRed}" Data="M 0,8 L 8,0 L 16,8 L 8,16 Z" />
                             <TextBlock Text="Preferences" Foreground="#F8FAFC" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
 
                         <Border Grid.Column="1" HorizontalAlignment="Center" Background="#10FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="8" Padding="3">
                             <StackPanel Orientation="Horizontal">
-                                <Border x:Name="SetTabGeneral" Background="#20FFFFFF" BorderBrush="#32FFFFFF" BorderThickness="1" CornerRadius="6" Padding="13,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="General">
+                                <Border x:Name="SetTabGeneral" Background="#20FFFFFF" BorderBrush="#32FFFFFF" BorderThickness="1" CornerRadius="6" Padding="11,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="General">
                                     <TextBlock x:Name="SetTabGeneralTxt" Text="General" Foreground="#FFFFFF" FontSize="11.5" FontWeight="SemiBold" />
                                 </Border>
-                                <Border x:Name="SetTabModules" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="13,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Modules">
+                                <Border x:Name="SetTabAppearance" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="11,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Appearance">
+                                    <TextBlock x:Name="SetTabAppearanceTxt" Text="Appearance" Foreground="#94A3B8" FontSize="11.5" />
+                                </Border>
+                                <Border x:Name="SetTabModules" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="11,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Modules">
                                     <TextBlock x:Name="SetTabModulesTxt" Text="Extensions" Foreground="#94A3B8" FontSize="11.5" />
                                 </Border>
-                                <Border x:Name="SetTabAi" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="13,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="AI">
+                                <Border x:Name="SetTabAi" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="11,4" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="AI">
                                     <TextBlock x:Name="SetTabAiTxt" Text="AI" Foreground="#94A3B8" FontSize="11.5" />
                                 </Border>
-                                <Border x:Name="SetTabData" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="13,4" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Data">
+                                <Border x:Name="SetTabData" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Padding="11,4" Cursor="Hand" MouseLeftButtonDown="SettingsTab_Click" Tag="Data">
                                     <TextBlock x:Name="SetTabDataTxt" Text="Storage" Foreground="#94A3B8" FontSize="11.5" />
                                 </Border>
                             </StackPanel>
@@ -791,7 +779,7 @@
                 </Border>
 
                 <!-- Row 1: Glass Tab Content Area -->
-                <ScrollViewer Grid.Row="1" Padding="22,16" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" Padding="22,16" VerticalScrollBarVisibility="Auto">
                     <Grid>
                         <!-- TAB 1: GENERAL (Windows Key Activation Only) -->
                         <StackPanel x:Name="SettingsTabGeneralPanel" Visibility="Visible">
@@ -852,19 +840,127 @@
                             <TextBlock Text="UPDATES" Foreground="{StaticResource TextMuted}" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
                             <Border Background="{StaticResource GlassCardFill}" BorderBrush="{StaticResource GlassCardBorder}" BorderThickness="1" CornerRadius="10" Padding="16,11">
-                                <Grid>
-                                    <StackPanel VerticalAlignment="Center" Margin="0,0,140,0">
-                                        <TextBlock Text="Software Updates" Foreground="#F8FAFC" FontSize="13" FontWeight="Medium" />
-                                        <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.4.0)" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" />
+                                <StackPanel>
+                                    <Grid>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,160,0">
+                                            <TextBlock Text="Software Updates" Foreground="#F8FAFC" FontSize="13" FontWeight="Medium" />
+                                            <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.4.0)" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <Border x:Name="BtnCancelUpdate" Visibility="Collapsed" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="CancelUpdate_Click">
+                                                <TextBlock Text="Cancel" Foreground="#94A3B8" FontSize="11.5" FontWeight="Medium" />
+                                            </Border>
+                                            <Border x:Name="BtnCheckUpdates" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="CheckUpdates_Click">
+                                                <TextBlock x:Name="BtnCheckUpdatesText" Text="Check for Updates" Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Grid>
+                                    <StackPanel x:Name="UpdateProgressContainer" Visibility="Collapsed" Margin="0,10,0,0">
+                                        <ProgressBar x:Name="UpdateProgressBar" Minimum="0" Maximum="100" Value="0" Height="6" Background="#1AFFFFFF" BorderThickness="0">
+                                            <ProgressBar.Template>
+                                                <ControlTemplate TargetType="ProgressBar">
+                                                    <Grid x:Name="TemplateRoot" SnapsToDevicePixels="True">
+                                                        <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="3" />
+                                                        <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource BrandRed}" />
+                                                        <Border x:Name="IndeterminatePulse" Visibility="Collapsed" Opacity="0.85" CornerRadius="3" Background="{DynamicResource BrandRed}" />
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsIndeterminate" Value="True">
+                                                            <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed" />
+                                                            <Setter TargetName="IndeterminatePulse" Property="Visibility" Value="Visible" />
+                                                            <Trigger.EnterActions>
+                                                                <BeginStoryboard x:Name="PulseStoryboard">
+                                                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                                        <DoubleAnimation Storyboard.TargetName="IndeterminatePulse"
+                                                                                         Storyboard.TargetProperty="Opacity"
+                                                                                         From="0.35" To="0.95" Duration="0:0:0.65" />
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </Trigger.EnterActions>
+                                                            <Trigger.ExitActions>
+                                                                <StopStoryboard BeginStoryboardName="PulseStoryboard" />
+                                                            </Trigger.ExitActions>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ProgressBar.Template>
+                                        </ProgressBar>
+                                        <Grid Margin="0,5,0,0">
+                                            <TextBlock x:Name="TxtUpdateStage" Text="Preparing update..." Foreground="#CBD5E1" FontSize="11" HorizontalAlignment="Left" />
+                                            <TextBlock x:Name="TxtUpdateBytes" Text="" Foreground="#94A3B8" FontSize="11" HorizontalAlignment="Right" />
+                                        </Grid>
                                     </StackPanel>
-                                    <Border HorizontalAlignment="Right" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="12,5" Cursor="Hand" MouseLeftButtonDown="CheckUpdates_Click">
-                                        <TextBlock x:Name="BtnCheckUpdatesText" Text="Check for Updates" Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold" />
-                                    </Border>
-                                </Grid>
+                                </StackPanel>
                             </Border>
                         </StackPanel>
 
-                        <!-- TAB 2: EXTENSIONS -->
+                        <!-- TAB 2: APPEARANCE & CUSTOMIZATION -->
+                        <StackPanel x:Name="SettingsTabAppearancePanel" Visibility="Collapsed">
+                            <TextBlock Text="WINDOW TRANSPARENCY" Foreground="{StaticResource TextMuted}" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
+
+                            <Border Background="{StaticResource GlassCardFill}" BorderBrush="{StaticResource GlassCardBorder}" BorderThickness="1" CornerRadius="10" Padding="16,13" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <Grid>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,70,0">
+                                            <TextBlock Text="Background Opacity" Foreground="#F8FAFC" FontSize="13" FontWeight="Medium" />
+                                            <TextBlock Text="Adjust frosted acrylic transparency of the launcher" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="TxtOpacityValue" Text="40%" Foreground="#F8FAFC" FontSize="12.5" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <Slider x:Name="SliderBgOpacity"
+                                            Minimum="0.25"
+                                            Maximum="1.0"
+                                            Value="0.40"
+                                            SmallChange="0.05"
+                                            LargeChange="0.10"
+                                            TickFrequency="0.05"
+                                            IsSnapToTickEnabled="True"
+                                            IsMoveToPointEnabled="True"
+                                            Margin="0,12,0,4"
+                                            ValueChanged="SliderBgOpacity_ValueChanged" />
+                                    <Grid>
+                                        <TextBlock Text="25% Clear Glass" Foreground="#64748B" FontSize="10.5" HorizontalAlignment="Left" />
+                                        <TextBlock Text="100% Solid Dark" Foreground="#64748B" FontSize="10.5" HorizontalAlignment="Right" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="THEME ACCENT COLOR" Foreground="{StaticResource TextMuted}" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
+
+                            <Border Background="{StaticResource GlassCardFill}" BorderBrush="{StaticResource GlassCardBorder}" BorderThickness="1" CornerRadius="10" Padding="16,13">
+                                <StackPanel>
+                                    <TextBlock Text="Accent Color" Foreground="#F8FAFC" FontSize="13" FontWeight="Medium" />
+                                    <TextBlock Text="Choose a preset or enter a custom #RRGGBB hex color" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" />
+
+                                    <StackPanel x:Name="ThemeSwatchesPanel" Orientation="Horizontal" Margin="0,12,0,12">
+                                        <Border x:Name="SwatchCoral" Width="26" Height="26" CornerRadius="13" Background="#FF6363" BorderBrush="#FFFFFFFF" BorderThickness="2" Margin="0,0,10,0" Cursor="Hand" ToolTip="Coral (#FF6363)" Tag="#FF6363" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                        <Border x:Name="SwatchBlue" Width="26" Height="26" CornerRadius="13" Background="#3B82F6" BorderBrush="#33FFFFFF" BorderThickness="2" Margin="0,0,10,0" Cursor="Hand" ToolTip="Electric Blue (#3B82F6)" Tag="#3B82F6" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                        <Border x:Name="SwatchEmerald" Width="26" Height="26" CornerRadius="13" Background="#10B981" BorderBrush="#33FFFFFF" BorderThickness="2" Margin="0,0,10,0" Cursor="Hand" ToolTip="Emerald (#10B981)" Tag="#10B981" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                        <Border x:Name="SwatchViolet" Width="26" Height="26" CornerRadius="13" Background="#8B5CF6" BorderBrush="#33FFFFFF" BorderThickness="2" Margin="0,0,10,0" Cursor="Hand" ToolTip="Violet (#8B5CF6)" Tag="#8B5CF6" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                        <Border x:Name="SwatchAmber" Width="26" Height="26" CornerRadius="13" Background="#F59E0B" BorderBrush="#33FFFFFF" BorderThickness="2" Margin="0,0,10,0" Cursor="Hand" ToolTip="Amber (#F59E0B)" Tag="#F59E0B" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                        <Border x:Name="SwatchRose" Width="26" Height="26" CornerRadius="13" Background="#F43F5E" BorderBrush="#33FFFFFF" BorderThickness="2" Margin="0,0,10,0" Cursor="Hand" ToolTip="Rose (#F43F5E)" Tag="#F43F5E" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                        <Border x:Name="SwatchCyan" Width="26" Height="26" CornerRadius="13" Background="#06B6D4" BorderBrush="#33FFFFFF" BorderThickness="2" Cursor="Hand" ToolTip="Cyan (#06B6D4)" Tag="#06B6D4" MouseLeftButtonDown="ThemeSwatch_Click" />
+                                    </StackPanel>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="TxtThemeHex" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="{DynamicResource BrandRed}" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,6" FontSize="12.5" MaxLength="7" />
+                                        <Border Grid.Column="1" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="14,6" Margin="8,0,0,0" Cursor="Hand" MouseLeftButtonDown="ApplyCustomThemeHex_Click">
+                                            <TextBlock Text="Apply" Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </Border>
+                                        <Border Grid.Column="2" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="12,6" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="ResetAppearance_Click">
+                                            <TextBlock Text="Reset Default" Foreground="#94A3B8" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- TAB 3: EXTENSIONS -->
                         <StackPanel x:Name="SettingsTabModulesPanel" Visibility="Collapsed">
                             <TextBlock Text="BUILT-IN EXTENSIONS" Foreground="{StaticResource TextMuted}" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,8" />
 
@@ -1014,7 +1110,7 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="TxtApiKeyOverride" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="#FF6363" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" TextChanged="TxtApiKeyOverride_TextChanged" />
+                                        <TextBox x:Name="TxtApiKeyOverride" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="{DynamicResource BrandRed}" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" TextChanged="TxtApiKeyOverride_TextChanged" />
                                         <Border Grid.Column="1" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="12,7" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="SaveKeyLocally_Click">
                                             <TextBlock x:Name="TxtSaveLocalKeyBtn" Text="Save" Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         </Border>
@@ -1034,7 +1130,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Custom Model ID (Optional)" Foreground="#94A3B8" FontSize="11.5" Margin="2,0,0,6" />
                                     <Grid Margin="0,0,0,14">
-                                        <TextBox x:Name="TxtAiModel" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="#FF6363" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" />
+                                        <TextBox x:Name="TxtAiModel" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="{DynamicResource BrandRed}" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" />
                                         <TextBlock Text="Enter custom model identifier..."
                                                    Foreground="#64748B"
                                                    FontSize="12.5"
@@ -1059,7 +1155,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="TxtCloudUrl" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="#FF6363" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" />
+                                        <TextBox x:Name="TxtCloudUrl" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="{DynamicResource BrandRed}" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" />
                                         <Border Grid.Column="1" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="14,7" Margin="8,0,0,0" Cursor="Hand" MouseLeftButtonDown="TestCloudHealth_Click">
                                             <TextBlock x:Name="TxtTestCloudBtn" Text="Test" Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         </Border>
@@ -1126,7 +1222,7 @@
                     <Grid VerticalAlignment="Center">
                         <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.4.0 • Noventra-Labs" Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
                         <Border HorizontalAlignment="Right"
-                                Background="{StaticResource BrandRed}"
+                                Background="{DynamicResource BrandRed}"
                                 CornerRadius="7"
                                 Padding="16,5"
                                 Cursor="Hand"

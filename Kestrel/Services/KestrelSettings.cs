@@ -33,8 +33,11 @@ namespace Kestrel.Services
         public List<string> MemReductExcludedProcesses { get; set; } = new();
         public bool EnablePowerTools { get; set; } = true;
 
-        // 3. Gemini & Multi-Provider Local + Cloud AI Configuration
-        public bool UseEmbeddedGeminiWeb { get; set; } = true;
+        // 3. Appearance & Customization
+        public double BackgroundOpacity { get; set; } = ThemeAppearance.DefaultOpacity;
+        public string ThemeAccentColor { get; set; } = ThemeAppearance.DefaultAccentHex;
+
+        // 4. Multi-Provider Local + Cloud AI Configuration
         public string CloudBackendUrl { get; set; } = "https://beam-cloud-ai-77889729488.asia-south1.run.app";
         public string DefaultAiModel { get; set; } = "";
         public string ActiveAiProvider { get; set; } = "gemini";
@@ -175,6 +178,8 @@ namespace Kestrel.Services
                                 settings.SetApiKeyForProvider(inferred, settings.UserApiKeyOverride);
                             }
                         }
+                        settings.BackgroundOpacity = ThemeAppearance.ClampOpacity(settings.BackgroundOpacity);
+                        settings.ThemeAccentColor = ThemeAppearance.NormalizeHexColor(settings.ThemeAccentColor);
                         settings.MemReductExcludedProcesses ??= new List<string>();
                         settings.SavedKeyProfiles ??= new Dictionary<string, string>();
                         Current = settings;

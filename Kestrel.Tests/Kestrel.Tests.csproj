@@ -14,6 +14,9 @@
     <Compile Include="../Kestrel/Services/SearchEngine.cs" Link="SearchEngine.cs" />
     <Compile Include="../Kestrel/Services/PowerDeveloperToolsService.cs" Link="PowerDeveloperToolsService.cs" />
     <Compile Include="../Kestrel/Services/ToastNotification.cs" Link="ToastNotification.cs" />
+    <Compile Include="../Kestrel/Services/UpdateService.cs" Link="UpdateService.cs" />
+    <Compile Include="../Kestrel/Services/ThemeAppearance.cs" Link="ThemeAppearance.cs" />
+    <Compile Include="../Kestrel/Services/QuickOperationsService.cs" Link="QuickOperationsService.cs" />
     <Compile Include="../Kestrel/Interop/IconGenerator.cs" Link="IconGenerator.cs" />
     <Compile Include="../Kestrel/Interop/DwmApi.cs" Link="DwmApi.cs" />
     <Compile Include="../Kestrel/Interop/GlobalKeyboardHook.cs" Link="GlobalKeyboardHook.cs" />

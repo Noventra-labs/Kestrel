@@ -831,6 +831,146 @@ internal static class Program
                   fallbackGlyph.Pen != null,
                 "squircle icon fallback uses transparent-interior stroke glyph");
 
+            // 5. UpdateService Lightweight Self-Update Tests
+            string sampleReleaseJson = """
+            {
+              "tag_name": "v2.5.0",
+              "body": "Smaller compressed update",
+              "html_url": "https://github.com/Noventra-labs/Kestrel/releases/tag/v2.5.0",
+              "assets": [
+                {
+                  "name": "Kestrel-Setup.exe",
+                  "size": 175600000,
+                  "browser_download_url": "https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/Kestrel-Setup.exe"
+                },
+                {
+                  "name": "Kestrel.exe",
+                  "size": 100100000,
+                  "digest": "sha256:67d1ca0bf4873fc28ee4bd3dc64af5bb28b4c4ee8d21086d888d9b954af5c3da",
+                  "browser_download_url": "https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/Kestrel.exe"
+                },
+                {
+                  "name": "checksums.txt",
+                  "size": 302,
+                  "browser_download_url": "https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/checksums.txt"
+                }
+              ]
+            }
+            """;
+            var parsedUpdate = UpdateService.ParseReleaseJson(sampleReleaseJson, new Version(2, 4, 0));
+            Check(parsedUpdate.IsNewer &&
+                  parsedUpdate.ExecutableUrl.EndsWith("/Kestrel.exe", StringComparison.Ordinal) &&
+                  parsedUpdate.ExecutableSizeBytes == 100100000 &&
+                  parsedUpdate.ExecutableSha256 == "67d1ca0bf4873fc28ee4bd3dc64af5bb28b4c4ee8d21086d888d9b954af5c3da" &&
+                  parsedUpdate.ChecksumsUrl.EndsWith("/checksums.txt", StringComparison.Ordinal),
+                "UpdateService parses Kestrel.exe asset, size, sha256 digest, and checksums.txt");
+            Check(UpdateService.ResolveDownloadTargetUrl(parsedUpdate) == parsedUpdate.ExecutableUrl,
+                "UpdateService prefers lightweight Kestrel.exe over Kestrel-Setup.exe for updates");
+
+            string psChecksums = """
+                Algorithm : SHA256
+                Hash      : 67D1CA0BF4873FC28EE4BD3DC64AF5BB28B4C4EE8D21086D888D9B954AF5C3DA
+                Path      : D:\a\Kestrel\Kestrel\Kestrel.exe
+
+                Algorithm : SHA256
+                Hash      : DCF9E15853F92D851BB1C487636A5B496B9AF7AC00B303C2ED98CE8A5AC1A2F2
+                Path      : D:\a\Kestrel\Kestrel\Kestrel-Setup.exe
+                """;
+            Check(string.Equals(UpdateService.ParseChecksumForAsset(psChecksums, "Kestrel.exe"),
+                  "67D1CA0BF4873FC28EE4BD3DC64AF5BB28B4C4EE8D21086D888D9B954AF5C3DA", StringComparison.OrdinalIgnoreCase),
+                "UpdateService parses PowerShell Format-List checksums.txt");
+
+            string gnuChecksums = "67d1ca0bf4873fc28ee4bd3dc64af5bb28b4c4ee8d21086d888d9b954af5c3da  Kestrel.exe\n";
+            Check(string.Equals(UpdateService.ParseChecksumForAsset(gnuChecksums, "Kestrel.exe"),
+                  "67d1ca0bf4873fc28ee4bd3dc64af5bb28b4c4ee8d21086d888d9b954af5c3da", StringComparison.OrdinalIgnoreCase),
+                "UpdateService parses standard sha256sum checksums.txt");
+
+            Check(UpdateService.IsStandaloneKestrelExe(Path.Combine(custom, "Kestrel.exe")) &&
+                  !UpdateService.IsStandaloneKestrelExe(Path.Combine(custom, "dotnet.exe")),
+                "UpdateService IsStandaloneKestrelExe accepts Kestrel.exe and rejects dotnet host");
+            Check(UpdateService.CanSelfUpdate(Path.Combine(custom, "Kestrel.exe")) &&
+                  !UpdateService.CanSelfUpdate(Path.Combine(custom, "dotnet.exe")),
+                "UpdateService CanSelfUpdate accepts writable Kestrel.exe and rejects dotnet host");
+
+            Check(UpdateService.ParseUpdatedVersionArg(new[] { "--replace", "--updated", "v2.5.0" }) == "2.5.0" &&
+                  UpdateService.ParseUpdatedVersionArg(new[] { "--updated=2.5.0" }) == "2.5.0" &&
+                  UpdateService.ParseUpdatedVersionArg(new[] { "--updated", "bad;cmd" }) == null &&
+                  UpdateService.ParseUpdatedVersionArg(new[] { "--tray" }) == null,
+                "UpdateService ParseUpdatedVersionArg validates safe version tags and rejects malformed values");
+
+            string updateScript = UpdateService.BuildSelfUpdateScript(
+                Path.Combine(custom, "Kestrel.exe"),
+                Path.Combine(custom, "Kestrel.exe.update"),
+                int.MaxValue,
+                "v2.5.0");
+            Check(updateScript.Contains("O''Brien") &&
+                  updateScript.Contains("DisplayVersion") &&
+                  updateScript.Contains("2.5.0") &&
+                  updateScript.Contains("--replace") &&
+                  updateScript.Contains("--updated") &&
+                  updateScript.Contains(".old"),
+                "self-update script quotes paths, preserves backup rollback, updates DisplayVersion, and relaunches with --updated");
+            var updateParseInfo = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+            string updateParseCmd = "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseInput([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" +
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(updateScript)) + "')), [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count) { exit 1 }";
+            updateParseInfo.ArgumentList.Add("-NoProfile");
+            updateParseInfo.ArgumentList.Add("-EncodedCommand");
+            updateParseInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.Unicode.GetBytes(updateParseCmd)));
+            using var updateParseProc = Process.Start(updateParseInfo)!;
+            await updateParseProc.WaitForExitAsync();
+            Check(updateParseProc.ExitCode == 0, "self-update PowerShell script parses cleanly with spaces, apostrophes, and ampersands");
+
+            string testOldArtifact = Path.Combine(custom, "Kestrel.exe.old");
+            string testUpdateArtifact = Path.Combine(custom, "Kestrel.exe.update");
+            File.WriteAllText(testOldArtifact, "old");
+            File.WriteAllText(testUpdateArtifact, "update");
+            UpdateService.CleanupPostUpdateArtifacts(Path.Combine(custom, "Kestrel.exe"));
+            Check(!File.Exists(testOldArtifact) && !File.Exists(testUpdateArtifact) && File.Exists(Path.Combine(custom, "Kestrel.exe")),
+                "UpdateService CleanupPostUpdateArtifacts removes .old and .update files while preserving Kestrel.exe");
+
+            // 6. ThemeAppearance & QuickOperationsService Tests
+            Check(ThemeAppearance.NormalizeHexColor("#3b82f6") == "#3B82F6" &&
+                  ThemeAppearance.NormalizeHexColor("06b6d4") == "#06B6D4" &&
+                  ThemeAppearance.NormalizeHexColor("#f0a") == "#FF00AA" &&
+                  ThemeAppearance.NormalizeHexColor("invalid") == "#FF6363",
+                "ThemeAppearance.NormalizeHexColor normalizes 3/6-digit hex and falls back safely");
+
+            Check(ThemeAppearance.ClampOpacity(0.1) == ThemeAppearance.MinOpacity &&
+                  ThemeAppearance.ClampOpacity(1.5) == ThemeAppearance.MaxOpacity &&
+                  ThemeAppearance.ClampOpacity(double.NaN) == ThemeAppearance.DefaultOpacity &&
+                  ThemeAppearance.ClampOpacity(0.75) == 0.75,
+                "ThemeAppearance.ClampOpacity enforces bounds and NaN fallback");
+
+            var alphasLow = ThemeAppearance.ComputeShellAlphas(0.25);
+            var alphasMid = ThemeAppearance.ComputeShellAlphas(0.40);
+            var alphasHigh = ThemeAppearance.ComputeShellAlphas(1.00);
+            Check(alphasLow.TopAlpha < alphasMid.TopAlpha && alphasMid.TopAlpha < alphasHigh.TopAlpha &&
+                  alphasLow.BottomAlpha < alphasMid.BottomAlpha && alphasMid.BottomAlpha < alphasHigh.BottomAlpha,
+                "ThemeAppearance.ComputeShellAlphas scales monotonically with opacity");
+
+            Check(QuickOperationsService.TryParseIncognitoQuery("incognito", out string inc1) && inc1 == "" &&
+                  QuickOperationsService.TryParseIncognitoQuery("incognito github.com", out string inc2) && inc2 == "github.com" &&
+                  QuickOperationsService.TryParseIncognitoQuery("private weather today", out string inc3) && inc3 == "weather today" &&
+                  !QuickOperationsService.TryParseIncognitoQuery("notepad", out _),
+                "QuickOperationsService.TryParseIncognitoQuery parses bare and parameterized private queries");
+
+            Check(QuickOperationsService.TryParseFileSearchQuery("file", out string fs1) && fs1 == "" &&
+                  QuickOperationsService.TryParseFileSearchQuery("file report.pdf", out string fs2) && fs2 == "report.pdf" &&
+                  QuickOperationsService.TryParseFileSearchQuery("find notes", out string fs3) && fs3 == "notes" &&
+                  QuickOperationsService.TryParseFileSearchQuery("f budget", out string fs4) && fs4 == "budget" &&
+                  !QuickOperationsService.TryParseFileSearchQuery("firefox", out _),
+                "QuickOperationsService.TryParseFileSearchQuery parses file/find prefixes without false positives");
+
+            var argsBare = QuickOperationsService.BuildPrivateBrowsingArguments("--incognito", null);
+            var argsDomain = QuickOperationsService.BuildPrivateBrowsingArguments("-private-window", "github.com");
+            var argsUrl = QuickOperationsService.BuildPrivateBrowsingArguments("-inprivate", "https://example.com/a");
+            var argsSearch = QuickOperationsService.BuildPrivateBrowsingArguments("--incognito", "hello world");
+            Check(argsBare.SequenceEqual(new[] { "--incognito" }) &&
+                  argsDomain.SequenceEqual(new[] { "-private-window", "https://github.com/" }) &&
+                  argsUrl.SequenceEqual(new[] { "-inprivate", "https://example.com/a" }) &&
+                  argsSearch.SequenceEqual(new[] { "--incognito", "https://www.google.com/search?q=hello%20world" }),
+                "QuickOperationsService.BuildPrivateBrowsingArguments handles bare, domain, URL, and search queries");
+
             Console.WriteLine($"{_passed} checks passed.");
         }
         finally
