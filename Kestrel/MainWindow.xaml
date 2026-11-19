@@ -844,7 +844,7 @@
                                     <Grid>
                                         <StackPanel VerticalAlignment="Center" Margin="0,0,160,0">
                                             <TextBlock Text="Software Updates" Foreground="#F8FAFC" FontSize="13" FontWeight="Medium" />
-                                            <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.4.0)" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.4.1)" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <Border x:Name="BtnCancelUpdate" Visibility="Collapsed" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="CancelUpdate_Click">
@@ -1220,7 +1220,7 @@
                 <!-- Row 2: Minimal Frosted Footer -->
                 <Border Grid.Row="2" Background="#1205070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" CornerRadius="0,0,16,16" Padding="20,0">
                     <Grid VerticalAlignment="Center">
-                        <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.4.0 • Noventra-Labs" Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
+                        <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.4.1 • Noventra-Labs" Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
                         <Border HorizontalAlignment="Right"
                                 Background="{DynamicResource BrandRed}"
                                 CornerRadius="7"

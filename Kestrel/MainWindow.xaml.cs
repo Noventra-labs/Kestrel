@@ -530,6 +530,34 @@ namespace Kestrel
             }
         }
 
+        // Fade + slide/scale in. Purely visual; never delays focus or input.
+        private static void AnimateIn(FrameworkElement el, double fromY = 6, double fromScale = 1)
+        {
+            var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+            var d = TimeSpan.FromMilliseconds(140);
+            var tt = new TranslateTransform(0, fromY);
+            var st = new ScaleTransform(fromScale, fromScale);
+            el.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            el.RenderTransform = new TransformGroup { Children = { st, tt } };
+            el.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, d) { EasingFunction = ease });
+            tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(fromY, 0, d) { EasingFunction = ease });
+            if (fromScale != 1)
+            {
+                var sa = new DoubleAnimation(fromScale, 1, d) { EasingFunction = ease };
+                st.BeginAnimation(ScaleTransform.ScaleXProperty, sa);
+                st.BeginAnimation(ScaleTransform.ScaleYProperty, sa);
+            }
+        }
+
+        // Ease a pill's brush from its current colour to the target.
+        private static void AnimateBrush(Border b, DependencyProperty prop, System.Windows.Media.Color to)
+        {
+            var from = (b.GetValue(prop) as SolidColorBrush)?.Color ?? System.Windows.Media.Colors.Transparent;
+            var brush = new SolidColorBrush(from);
+            b.SetValue(prop, brush);
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(to, TimeSpan.FromMilliseconds(140)));
+        }
+
         private void FocusSearchBox()
         {
             FocusManager.SetFocusedElement(this, SearchBox);
@@ -545,6 +573,7 @@ namespace Kestrel
             GlobalKeyboardHook.CaptureActiveWindow();
 
             Show();
+            AnimateIn(MainShellBorder, fromY: 0, fromScale: 0.985);
             WindowState = WindowState.Normal;
             Topmost = true;
 
@@ -722,12 +751,12 @@ namespace Kestrel
                 foreach (var tab in tabs)
                 {
                     bool isSelected = tab == clicked;
-                    tab.Background = isSelected
-                        ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1E, 255, 255, 255))
-                        : System.Windows.Media.Brushes.Transparent;
-                    tab.BorderBrush = isSelected
-                        ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x32, 255, 255, 255))
-                        : System.Windows.Media.Brushes.Transparent;
+                    AnimateBrush(tab, Border.BackgroundProperty, isSelected
+                        ? System.Windows.Media.Color.FromArgb(0x1E, 255, 255, 255)
+                        : System.Windows.Media.Colors.Transparent);
+                    AnimateBrush(tab, Border.BorderBrushProperty, isSelected
+                        ? System.Windows.Media.Color.FromArgb(0x32, 255, 255, 255)
+                        : System.Windows.Media.Colors.Transparent);
                     if (tab.Child is TextBlock tb)
                     {
                         tb.Foreground = isSelected
@@ -738,6 +767,7 @@ namespace Kestrel
                 }
 
                 UpdateFilter();
+                AnimateIn(ResultsList, 4);
                 FocusSearchBox();
             }
         }
@@ -2137,6 +2167,7 @@ namespace Kestrel
             ActionsList.ItemsSource = _currentActions;
             ActionsList.SelectedIndex = 0;
             ActionsOverlay.Visibility = Visibility.Visible;
+            AnimateIn(ActionsOverlay, 8);
             ActionsList.Focus();
         }
 
@@ -2220,8 +2251,9 @@ namespace Kestrel
             RefreshIndexTelemetryText();
 
             _isLoadingSettingsUi = false;
-            SettingsSavedNotice.Text = "Kestrel v2.4.0 • Noventra-Labs";
+            SettingsSavedNotice.Text = "Kestrel v2.4.1 • Noventra-Labs";
             SettingsOverlay.Visibility = Visibility.Visible;
+            AnimateIn(SettingsOverlay, 8);
         }
 
         private void RefreshProviderPillsUi()
@@ -2286,12 +2318,12 @@ namespace Kestrel
             for (int i = 0; i < tabBorders.Length; i++)
             {
                 bool active = string.Equals(tabBorders[i].Tag as string, tabName, StringComparison.OrdinalIgnoreCase);
-                tabBorders[i].Background = active
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 255, 255, 255))
-                    : System.Windows.Media.Brushes.Transparent;
-                tabBorders[i].BorderBrush = active
-                    ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x32, 255, 255, 255))
-                    : System.Windows.Media.Brushes.Transparent;
+                AnimateBrush(tabBorders[i], Border.BackgroundProperty, active
+                    ? System.Windows.Media.Color.FromArgb(0x20, 255, 255, 255)
+                    : System.Windows.Media.Colors.Transparent);
+                AnimateBrush(tabBorders[i], Border.BorderBrushProperty, active
+                    ? System.Windows.Media.Color.FromArgb(0x32, 255, 255, 255)
+                    : System.Windows.Media.Colors.Transparent);
                 tabTexts[i].Foreground = active
                     ? System.Windows.Media.Brushes.White
                     : new SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184));
@@ -2303,6 +2335,14 @@ namespace Kestrel
             SettingsTabModulesPanel.Visibility = tabName == "Modules" ? Visibility.Visible : Visibility.Collapsed;
             SettingsTabAiPanel.Visibility = tabName == "AI" ? Visibility.Visible : Visibility.Collapsed;
             SettingsTabDataPanel.Visibility = tabName == "Data" ? Visibility.Visible : Visibility.Collapsed;
+            AnimateIn(tabName switch
+            {
+                "Appearance" => SettingsTabAppearancePanel,
+                "Modules" => SettingsTabModulesPanel,
+                "AI" => SettingsTabAiPanel,
+                "Data" => SettingsTabDataPanel,
+                _ => SettingsTabGeneralPanel
+            });
 
             if (tabName == "Data")
             {
@@ -2591,6 +2631,7 @@ namespace Kestrel
             _settings.Save(notify: true);
             SettingsOverlay.Visibility = Visibility.Collapsed;
             LauncherView.Visibility = Visibility.Visible;
+            AnimateIn(LauncherView, 8);
             FocusSearchBox();
         }
 
@@ -2829,6 +2870,7 @@ namespace Kestrel
             LauncherView.Visibility = Visibility.Collapsed;
             AiOverlay.Visibility = Visibility.Visible;
             GeminiApiChatContainer.Visibility = Visibility.Visible;
+            AnimateIn(AiOverlay, 8);
 
             var cleanedPrompt = promptInput.Trim();
             if (cleanedPrompt.Equals("gemini", StringComparison.OrdinalIgnoreCase) ||
@@ -3005,6 +3047,7 @@ namespace Kestrel
             _aiCts?.Cancel();
             AiOverlay.Visibility = Visibility.Collapsed;
             LauncherView.Visibility = Visibility.Visible;
+            AnimateIn(LauncherView, 8);
             FocusSearchBox();
         }
 

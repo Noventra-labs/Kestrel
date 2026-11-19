@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 
@@ -157,6 +158,8 @@ namespace KestrelInstaller
             PageSetup.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
             PageInstalling.Visibility = step is 2 or 4 ? Visibility.Visible : Visibility.Collapsed;
             PageComplete.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
+            var page = step == 1 ? PageSetup : step == 3 ? PageComplete : PageInstalling;
+            page.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
 
             if (step == 1)
             {
@@ -347,7 +350,7 @@ namespace KestrelInstaller
                         {
                             unKey.SetValue("DisplayName", "Kestrel", RegistryValueKind.String);
                             unKey.SetValue("Publisher", "Noventra-Labs", RegistryValueKind.String);
-                            unKey.SetValue("DisplayVersion", "2.4.0", RegistryValueKind.String);
+                            unKey.SetValue("DisplayVersion", "2.4.1", RegistryValueKind.String);
                             unKey.SetValue("DisplayIcon", targetIco, RegistryValueKind.String);
                             unKey.SetValue("InstallLocation", installDir, RegistryValueKind.String);
                             unKey.SetValue("UninstallString", $"\"{uninstallerPath}\" --uninstall", RegistryValueKind.String);
