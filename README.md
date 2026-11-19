@@ -193,6 +193,4 @@ Licensed under the open-source **[MIT License](LICENSE)**.
 
 ---
 
-<p align="center">
-  <strong>Kestrel — One command bar. All your tools.</strong>
-</p>
+**Kestrel — One command bar. All your tools.**
