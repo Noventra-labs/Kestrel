@@ -56,12 +56,6 @@ Pressing the <kbd>Win</kbd> key summons an omnibar for launching applications, s
 
 ---
 
-## Features
-
-<p align="center">
-  <img src="assets/kestrel-preview.png" alt="Kestrel Settings — Software Updates" width="680" />
-</p>
-
 ### Instant Application and Inline File Search
 - **Indexed App & File Search:** Indexes Start Menu, Desktop, and UWP apps alongside local files across `Desktop`, `Downloads`, `Documents`, and `%USERPROFILE%\Projects` (up to depth 4, max 3,500 files).
 - **Inline File Results:** Queries of 2+ characters in `All` mode automatically surface up to 6 local file matches inline; explicit `file`, `files`, `find`, or `f ` prefixes prioritize up to 12 file matches at the top of results and offer a quick jump to dedicated File Search (<kbd>Ctrl</kbd> + <kbd>F</kbd>).
