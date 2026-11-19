@@ -179,12 +179,31 @@ namespace Kestrel.Services
                 return (false, string.Empty, string.Empty);
 
             var expr = clean.Replace(" ", "");
-            if (!Regex.IsMatch(expr, @"^[\d+\-*/().%]+$") || Regex.IsMatch(expr, @"[+\-*/]$"))
+            if (expr.Length > 256 || !Regex.IsMatch(expr, @"^[\d+\-*/().%]+$") || Regex.IsMatch(expr, @"[+\-*/]$"))
+                return (false, string.Empty, string.Empty);
+
+            int depth = 0;
+            foreach (char ch in expr)
+            {
+                if (ch == '(')
+                {
+                    if (++depth > 32) return (false, string.Empty, string.Empty);
+                }
+                else if (ch == ')')
+                {
+                    if (--depth < 0) return (false, string.Empty, string.Empty);
+                }
+            }
+            if (depth != 0)
                 return (false, string.Empty, string.Empty);
 
             try
             {
-                var val = Table.Compute(expr, null);
+                object? val;
+                lock (Table)
+                {
+                    val = Table.Compute(expr, null);
+                }
                 if (val != null && val != DBNull.Value)
                 {
                     return (true, clean, FormatNumber(Convert.ToDouble(val)));

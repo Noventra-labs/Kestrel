@@ -30,10 +30,16 @@ namespace KestrelInstaller
                 var processPath = Environment.ProcessPath;
                 if (string.IsNullOrEmpty(processPath) || !File.Exists(processPath)) return false;
 
+                var safeArgs = args.Where(a =>
+                    a.Equals("--uninstall", StringComparison.OrdinalIgnoreCase) ||
+                    a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase) ||
+                    a.Equals("--silent", StringComparison.OrdinalIgnoreCase) ||
+                    a.Equals("/S", StringComparison.OrdinalIgnoreCase));
+
                 var psi = new ProcessStartInfo
                 {
                     FileName = processPath,
-                    Arguments = string.Join(" ", args.Select(a => $"\"{a}\"")),
+                    Arguments = string.Join(" ", safeArgs),
                     Verb = "runas",
                     UseShellExecute = true
                 };

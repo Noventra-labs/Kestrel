@@ -144,6 +144,9 @@ namespace Kestrel.Services
             return UserApiKeyOverride?.Trim() ?? "";
         }
 
+        private static bool HasPlaintextSecret(string? value) =>
+            !string.IsNullOrWhiteSpace(value) && !CloudIdentity.IsProtectedSecret(value.Trim());
+
         public static KestrelSettings Load()
         {
             try
@@ -169,6 +172,27 @@ namespace Kestrel.Services
                             settings.DefaultAiModel = "";
                         }
 
+                        settings.MemReductExcludedProcesses ??= new List<string>();
+                        settings.SavedKeyProfiles ??= new Dictionary<string, string>();
+
+                        bool needsMigration = !string.Equals(targetFile, SettingsFile, StringComparison.OrdinalIgnoreCase) ||
+                            HasPlaintextSecret(settings.UserApiKeyOverride) ||
+                            HasPlaintextSecret(settings.GeminiApiKey) ||
+                            HasPlaintextSecret(settings.OpenAiApiKey) ||
+                            HasPlaintextSecret(settings.GroqApiKey) ||
+                            HasPlaintextSecret(settings.AnthropicApiKey) ||
+                            settings.SavedKeyProfiles.Values.Any(HasPlaintextSecret);
+
+                        settings.UserApiKeyOverride = CloudIdentity.UnprotectSecret(settings.UserApiKeyOverride);
+                        settings.GeminiApiKey = CloudIdentity.UnprotectSecret(settings.GeminiApiKey);
+                        settings.OpenAiApiKey = CloudIdentity.UnprotectSecret(settings.OpenAiApiKey);
+                        settings.GroqApiKey = CloudIdentity.UnprotectSecret(settings.GroqApiKey);
+                        settings.AnthropicApiKey = CloudIdentity.UnprotectSecret(settings.AnthropicApiKey);
+                        foreach (var key in settings.SavedKeyProfiles.Keys.ToList())
+                        {
+                            settings.SavedKeyProfiles[key] = CloudIdentity.UnprotectSecret(settings.SavedKeyProfiles[key]);
+                        }
+
                         // Migrate legacy single key into provider-specific slot if empty
                         if (!string.IsNullOrWhiteSpace(settings.UserApiKeyOverride))
                         {
@@ -180,9 +204,11 @@ namespace Kestrel.Services
                         }
                         settings.BackgroundOpacity = ThemeAppearance.ClampOpacity(settings.BackgroundOpacity);
                         settings.ThemeAccentColor = ThemeAppearance.NormalizeHexColor(settings.ThemeAccentColor);
-                        settings.MemReductExcludedProcesses ??= new List<string>();
-                        settings.SavedKeyProfiles ??= new Dictionary<string, string>();
                         Current = settings;
+                        if (needsMigration)
+                        {
+                            settings.Save(notify: false);
+                        }
                         return settings;
                     }
                 }
@@ -204,8 +230,36 @@ namespace Kestrel.Services
                     Directory.CreateDirectory(SettingsFolder);
                 }
 
-                var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(SettingsFile, json);
+                var persisted = (KestrelSettings)MemberwiseClone();
+                persisted.UserApiKeyOverride = CloudIdentity.ProtectSecret(UserApiKeyOverride);
+                persisted.GeminiApiKey = CloudIdentity.ProtectSecret(GeminiApiKey);
+                persisted.OpenAiApiKey = CloudIdentity.ProtectSecret(OpenAiApiKey);
+                persisted.GroqApiKey = CloudIdentity.ProtectSecret(GroqApiKey);
+                persisted.AnthropicApiKey = CloudIdentity.ProtectSecret(AnthropicApiKey);
+
+                var protectedProfiles = new Dictionary<string, string>(
+                    SavedKeyProfiles?.Count ?? 0,
+                    SavedKeyProfiles?.Comparer);
+                if (SavedKeyProfiles != null)
+                {
+                    foreach (var kv in SavedKeyProfiles)
+                    {
+                        protectedProfiles[kv.Key] = CloudIdentity.ProtectSecret(kv.Value);
+                    }
+                }
+                persisted.SavedKeyProfiles = protectedProfiles;
+
+                var json = JsonSerializer.Serialize(persisted, new JsonSerializerOptions { WriteIndented = true });
+                string tempFile = Path.Combine(SettingsFolder, $".settings-{Guid.NewGuid():N}.tmp");
+                try
+                {
+                    File.WriteAllText(tempFile, json);
+                    File.Move(tempFile, SettingsFile, overwrite: true);
+                }
+                finally
+                {
+                    try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+                }
 
                 Current = this;
                 ApplyWindowsStartupRegistry(LaunchOnStartup);
@@ -230,8 +284,7 @@ namespace Kestrel.Services
                 {
                     var exePath = Process.GetCurrentProcess().MainModule?.FileName;
                     if (!string.IsNullOrWhiteSpace(exePath) &&
-                        (exePath.EndsWith("Kestrel.exe", StringComparison.OrdinalIgnoreCase) ||
-                         exePath.EndsWith("Kestrel.exe", StringComparison.OrdinalIgnoreCase)))
+                        exePath.EndsWith("Kestrel.exe", StringComparison.OrdinalIgnoreCase))
                     {
                         key.SetValue("KestrelLauncher", $"\"{exePath}\" --tray");
                         key.DeleteValue("BeamLauncher", false);

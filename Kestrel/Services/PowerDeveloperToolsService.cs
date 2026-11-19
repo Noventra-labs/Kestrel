@@ -561,6 +561,7 @@ namespace Kestrel.Services
             if (trimmed.StartsWith("sha256 ", StringComparison.OrdinalIgnoreCase))
             {
                 string input = trimmed[7..];
+                if (input.Length > 65536) return new InlineEvalResult();
                 byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
                 string hex = Convert.ToHexString(hash).ToLowerInvariant();
 
@@ -580,6 +581,7 @@ namespace Kestrel.Services
             if (trimmed.StartsWith("md5 ", StringComparison.OrdinalIgnoreCase))
             {
                 string input = trimmed[4..];
+                if (input.Length > 65536) return new InlineEvalResult();
                 byte[] hash = MD5.HashData(Encoding.UTF8.GetBytes(input));
                 string hex = Convert.ToHexString(hash).ToLowerInvariant();
 
@@ -599,6 +601,7 @@ namespace Kestrel.Services
             if (trimmed.StartsWith("sha1 ", StringComparison.OrdinalIgnoreCase))
             {
                 string input = trimmed[5..];
+                if (input.Length > 65536) return new InlineEvalResult();
                 byte[] hash = SHA1.HashData(Encoding.UTF8.GetBytes(input));
                 string hex = Convert.ToHexString(hash).ToLowerInvariant();
 
@@ -619,6 +622,7 @@ namespace Kestrel.Services
             if (trimmed.StartsWith("base64 ", StringComparison.OrdinalIgnoreCase))
             {
                 string input = trimmed[7..];
+                if (input.Length > 65536) return new InlineEvalResult();
                 string b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(input));
 
                 return new InlineEvalResult
@@ -639,6 +643,7 @@ namespace Kestrel.Services
             {
                 int prefixLen = trimmed.StartsWith("base64decode ", StringComparison.OrdinalIgnoreCase) ? 13 : 8;
                 string input = trimmed[prefixLen..].Trim();
+                if (input.Length > 65536) return new InlineEvalResult();
                 try
                 {
                     byte[] bytes = Convert.FromBase64String(input);
@@ -668,7 +673,7 @@ namespace Kestrel.Services
             claimsSubtitle = string.Empty;
             formattedOutput = string.Empty;
 
-            if (string.IsNullOrWhiteSpace(token)) return false;
+            if (string.IsNullOrWhiteSpace(token) || token.Length > 32768) return false;
 
             string[] parts = token.Trim().Split('.');
             if (parts.Length < 2 || parts.Length > 3) return false;
@@ -1244,6 +1249,11 @@ namespace Kestrel.Services
                 error = "Clipboard does not contain JSON text.";
                 return false;
             }
+            if (input.Length > 2_000_000)
+            {
+                error = "Clipboard JSON exceeds 2 MB limit.";
+                return false;
+            }
 
             try
             {
@@ -1473,8 +1483,15 @@ namespace Kestrel.Services
 
         public static TempCleanupOutcome ExecuteTempFilesCleanup(TempCleanupPreview preview)
         {
-            if (preview == null || preview.Files.Count == 0)
+            if (preview == null || preview.Files.Count == 0 || preview.ScannedRoots == null || preview.ScannedRoots.Length == 0)
                 return new TempCleanupOutcome(0, 0, 0);
+
+            var normalizedRoots = preview.ScannedRoots
+                .Where(r => !string.IsNullOrWhiteSpace(r) && Path.IsPathFullyQualified(r))
+                .Select(r => Path.GetFullPath(r).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(r => r.Length)
+                .ToArray();
 
             int deleted = 0;
             int failed = 0;
@@ -1484,12 +1501,40 @@ namespace Kestrel.Services
             {
                 try
                 {
-                    if (File.Exists(item.FullPath))
+                    if (string.IsNullOrWhiteSpace(item.FullPath) || !Path.IsPathFullyQualified(item.FullPath))
                     {
-                        File.Delete(item.FullPath);
-                        deleted++;
-                        freed += item.SizeBytes;
+                        failed++;
+                        continue;
                     }
+
+                    string fullPath = Path.GetFullPath(item.FullPath);
+                    string? matchedRoot = normalizedRoots.FirstOrDefault(root =>
+                        fullPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+                    if (matchedRoot == null)
+                    {
+                        failed++;
+                        continue;
+                    }
+
+                    if (!HasNoReparsePointAncestors(fullPath, matchedRoot))
+                    {
+                        failed++;
+                        continue;
+                    }
+
+                    if (!File.Exists(fullPath))
+                        continue;
+
+                    FileAttributes attrs = File.GetAttributes(fullPath);
+                    if ((attrs & (FileAttributes.Directory | FileAttributes.System | FileAttributes.ReadOnly | FileAttributes.ReparsePoint)) != 0)
+                    {
+                        failed++;
+                        continue;
+                    }
+
+                    File.Delete(fullPath);
+                    deleted++;
+                    freed += item.SizeBytes;
                 }
                 catch
                 {
@@ -1498,6 +1543,32 @@ namespace Kestrel.Services
             }
 
             return new TempCleanupOutcome(deleted, failed, freed);
+        }
+
+        private static bool HasNoReparsePointAncestors(string fullFilePath, string normalizedRoot)
+        {
+            try
+            {
+                string? current = Path.GetDirectoryName(fullFilePath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                while (!string.IsNullOrEmpty(current))
+                {
+                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                        return false;
+
+                    if (string.Equals(current, normalizedRoot, StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    if (current.Length <= normalizedRoot.Length)
+                        return false;
+
+                    current = Path.GetDirectoryName(current)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static List<HungWindowInfo> ScanUnresponsiveWindows()
@@ -1555,9 +1626,10 @@ namespace Kestrel.Services
 
             try
             {
+                string ipconfigPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "ipconfig.exe");
                 var psi = new ProcessStartInfo
                 {
-                    FileName = "ipconfig",
+                    FileName = ipconfigPath,
                     Arguments = "/flushdns",
                     CreateNoWindow = true,
                     UseShellExecute = false
@@ -1577,11 +1649,13 @@ namespace Kestrel.Services
             try
             {
                 string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+                string sysdir = Environment.GetFolderPath(Environment.SpecialFolder.System);
                 string hostsPath = Path.Combine(windir, "System32", "drivers", "etc", "hosts");
+                string notepadPath = Path.Combine(sysdir, "notepad.exe");
 
                 var psi = new ProcessStartInfo
                 {
-                    FileName = "notepad.exe",
+                    FileName = notepadPath,
                     Arguments = $"\"{hostsPath}\"",
                     UseShellExecute = true,
                     Verb = "runas"

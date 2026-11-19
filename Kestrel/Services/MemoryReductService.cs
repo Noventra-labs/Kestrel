@@ -606,6 +606,23 @@ namespace Kestrel.Services
             "Kestrel",
             "memreduct-telemetry");
 
+        internal static bool IsReparsePointPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            try
+            {
+                return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return false;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
         internal static string GetTelemetryFilePath(string requestId)
         {
             if (!IsValidCorrelationId(requestId))
@@ -1896,6 +1913,11 @@ namespace Kestrel.Services
             {
                 try
                 {
+                    if (IsReparsePointPath(HeadlessTelemetryDirectory))
+                    {
+                        return anyKernelSucceeded ? 0 : 1;
+                    }
+
                     var telemetry = new HeadlessWorkerTelemetry
                     {
                         RequestId = requestId,
@@ -1920,16 +1942,26 @@ namespace Kestrel.Services
                     if (!Directory.Exists(HeadlessTelemetryDirectory))
                         Directory.CreateDirectory(HeadlessTelemetryDirectory);
 
+                    if (IsReparsePointPath(HeadlessTelemetryDirectory))
+                    {
+                        return anyKernelSucceeded ? 0 : 1;
+                    }
+
                     string finalPath = GetTelemetryFilePath(requestId);
                     string tempPath = Path.Combine(HeadlessTelemetryDirectory, $".tmp-{requestId}-{Guid.NewGuid():N}.json");
                     try
                     {
-                        if (File.Exists(finalPath) && (File.GetAttributes(finalPath) & FileAttributes.ReparsePoint) != 0)
+                        if (IsReparsePointPath(finalPath))
                         {
                             File.Delete(finalPath);
                         }
 
-                        File.WriteAllText(tempPath, JsonSerializer.Serialize(telemetry));
+                        using (var fs = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        using (var writer = new StreamWriter(fs))
+                        {
+                            writer.Write(JsonSerializer.Serialize(telemetry));
+                            writer.Flush();
+                        }
                         File.Move(tempPath, finalPath, overwrite: true);
                     }
                     finally
@@ -2305,13 +2337,19 @@ namespace Kestrel.Services
             string path = GetTelemetryFilePath(requestId);
             try
             {
+                if (IsReparsePointPath(HeadlessTelemetryDirectory))
+                {
+                    rejectReason = "telemetry directory is a reparse point";
+                    return null;
+                }
+
                 if (!File.Exists(path))
                 {
                     rejectReason = "telemetry file missing";
                     return null;
                 }
 
-                if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                if (IsReparsePointPath(path))
                 {
                     rejectReason = "telemetry file is a reparse point";
                     return null;
@@ -2891,10 +2929,18 @@ namespace Kestrel.Services
 
                 try
                 {
-                    string? exe = Process.GetCurrentProcess().MainModule?.FileName;
+                    string? exe = Environment.ProcessPath;
+                    if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
+                    {
+                        exe = Process.GetCurrentProcess().MainModule?.FileName;
+                    }
                     if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
                     {
                         exe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Kestrel.exe");
+                    }
+                    if (IsReparsePointPath(exe))
+                    {
+                        return new ElevatedWorkerLaunchResult(false, false, false, false, false, ERROR_ACCESS_DENIED);
                     }
 
                     string workerArgs = IsValidCorrelationId(requestId)

@@ -15,6 +15,8 @@ internal static class InstallationFiles
         string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
         if (string.Equals(full, Path.TrimEndingDirectorySeparator(Path.GetPathRoot(full)!), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Choose an application folder, not the root of a drive.");
+        if ((Directory.Exists(full) || File.Exists(full)) && (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("Installation folder cannot be a symlink or directory junction.");
         return full;
     }
 

@@ -844,7 +844,7 @@
                                     <Grid>
                                         <StackPanel VerticalAlignment="Center" Margin="0,0,160,0">
                                             <TextBlock Text="Software Updates" Foreground="#F8FAFC" FontSize="13" FontWeight="Medium" />
-                                            <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.4.2)" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="TxtUpdateStatus" Text="Kestrel is up to date (v2.4.3)" Foreground="#94A3B8" FontSize="11.5" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <Border x:Name="BtnCancelUpdate" Visibility="Collapsed" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="10,5" Margin="0" Cursor="Hand" MouseLeftButtonDown="CancelUpdate_Click">
@@ -1110,7 +1110,7 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="TxtApiKeyOverride" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="{DynamicResource BrandRed}" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" TextChanged="TxtApiKeyOverride_TextChanged" />
+                                        <PasswordBox x:Name="TxtApiKeyOverride" Grid.Column="0" Background="#12FFFFFF" Foreground="#FFFFFF" CaretBrush="{DynamicResource BrandRed}" BorderBrush="#26FFFFFF" BorderThickness="1" FocusVisualStyle="{x:Null}" Padding="10,7" FontSize="12.5" PasswordChanged="TxtApiKeyOverride_PasswordChanged" />
                                         <Border Grid.Column="1" Background="{StaticResource GlassChipFill}" BorderBrush="{StaticResource GlassChipBorder}" BorderThickness="1" CornerRadius="7" Padding="12,7" Margin="6,0,0,0" Cursor="Hand" MouseLeftButtonDown="SaveKeyLocally_Click">
                                             <TextBlock x:Name="TxtSaveLocalKeyBtn" Text="Save" Foreground="#F8FAFC" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         </Border>
@@ -1220,7 +1220,7 @@
                 <!-- Row 2: Minimal Frosted Footer -->
                 <Border Grid.Row="2" Background="#1205070B" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" CornerRadius="0,0,16,16" Padding="20,0">
                     <Grid VerticalAlignment="Center">
-                        <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.4.2 • Noventra-Labs" Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
+                        <TextBlock x:Name="SettingsSavedNotice" Text="Kestrel v2.4.3 • Noventra-Labs" Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="NoventraLink_Click" ToolTip="https://github.com/Noventra-labs/Kestrel" />
                         <Border HorizontalAlignment="Right"
                                 Background="{DynamicResource BrandRed}"
                                 CornerRadius="7"

@@ -46,6 +46,12 @@ internal static class Program
 
         var originalPlatform = MemoryReductService.Platform;
         var originalInspector = MemoryReductService.PathInspector;
+        var originalAiClient = AiClient.Client;
+        var originalUpdateApiClient = UpdateService.ApiClient;
+        var originalUpdateDownloadClient = UpdateService.DownloadClient;
+        var originalProcessPathOverride = UpdateService.ProcessPathOverride;
+        var originalHistoryFile = ClipboardService.HistoryFile;
+        var originalLegacyHistoryFile = ClipboardService.LegacyHistoryFile;
 
         try
         {
@@ -996,12 +1002,285 @@ internal static class Program
                   ToastNotification.NormalizeMessage("   Plain message  ") == "Plain message",
                 "ToastNotification.NormalizeMessage strips leading status glyphs for minimal text");
 
+            // 7. Hardened Security Regression Checks
+            // 7a. CloudIdentity DPAPI Secret Helpers & Blank Backend Rejection
+            Check(CloudIdentity.ProtectSecret("") == "" && CloudIdentity.ProtectSecret("   ") == "",
+                "CloudIdentity.ProtectSecret returns empty for blank secrets");
+            string encSecret = CloudIdentity.ProtectSecret("sk-test-secret-123");
+            Check(CloudIdentity.IsProtectedSecret(encSecret) &&
+                  !encSecret.Contains("sk-test-secret-123", StringComparison.Ordinal) &&
+                  CloudIdentity.ProtectSecret(encSecret) == encSecret &&
+                  CloudIdentity.UnprotectSecret(encSecret) == "sk-test-secret-123",
+                "CloudIdentity.ProtectSecret/UnprotectSecret encrypts with DPAPI, is idempotent, and round-trips");
+            Check(CloudIdentity.UnprotectSecret("legacy-plaintext-key") == "legacy-plaintext-key" &&
+                  CloudIdentity.UnprotectSecret(CloudIdentity.ProtectedSecretPrefix + "!!!invalid-base64") == "" &&
+                  CloudIdentity.UnprotectSecret(CloudIdentity.ProtectedSecretPrefix + Convert.ToBase64String(new byte[] { 1, 2, 3, 4 })) == "",
+                "CloudIdentity.UnprotectSecret passes legacy plaintext through and fails cleanly on corrupted DPAPI blobs");
+            try { CloudIdentity.ValidateBackend("   "); throw new Exception("blank backend accepted"); }
+            catch (InvalidOperationException) { Check(true, "CloudIdentity.ValidateBackend rejects blank backend URL"); }
+
+            // 7b. AiClient Gemini Header Auth, Model Validation, Groq Slash Model, Blank Cloud Direct Fallback
+            handler.SecureBackend = false;
+            await AiClient.StreamChatAsync(uri.AbsoluteUri, messages, "models/gemini-2.0-flash", "gem-secret-key", _ => { });
+            Check(!handler.LastUri.Contains("gem-secret-key", StringComparison.Ordinal) &&
+                  !handler.LastUri.Contains("key=", StringComparison.OrdinalIgnoreCase) &&
+                  handler.LastUri.Contains("/models/gemini-2.0-flash:streamGenerateContent", StringComparison.Ordinal) &&
+                  handler.LastGoogApiKey == "gem-secret-key",
+                "AiClient sends Gemini API key in x-goog-api-key header instead of URL query string");
+
+            Check(AiClient.ValidateGeminiModel("models/gemini-2.0-flash") == "gemini-2.0-flash",
+                "AiClient.ValidateGeminiModel strips optional models/ prefix");
+            try { AiClient.ValidateGeminiModel("gemini/../bad?x=1"); throw new Exception("bad gemini model accepted"); }
+            catch (ArgumentException) { Check(true, "AiClient.ValidateGeminiModel rejects path traversal / query characters"); }
+
+            await AiClient.StreamChatAsync(uri.AbsoluteUri, messages, "meta-llama/llama-3.3-70b-versatile", "groq-secret", _ => { });
+            Check(handler.LastUri.Contains("api.groq.com", StringComparison.OrdinalIgnoreCase),
+                "AiClient preserves slash-containing Groq model identifiers");
+
+            handler.SecureBackend = true;
+            int cloudPostsBeforeBlank = handler.Posts;
+            await AiClient.StreamChatAsync("", messages, "gpt-test", "local-openai-key", _ => { });
+            Check(handler.Posts == cloudPostsBeforeBlank + 1 &&
+                  handler.LastUri.StartsWith("https://api.openai.com/", StringComparison.OrdinalIgnoreCase),
+                "AiClient routes blank cloud backend URL straight to direct provider fallback");
+
+            // 7c. UpdateService GitHub Allowlist, Fail-Closed SHA-256, Redirect Guard, 5-arg Self-Update Script
+            Check(UpdateService.IsAllowedGitHubReleaseUrl("https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/Kestrel.exe", out _) &&
+                  UpdateService.IsAllowedGitHubReleaseUrl("https://api.github.com/repos/Noventra-labs/Kestrel/releases/latest", out _) &&
+                  UpdateService.IsAllowedGitHubReleaseUrl("https://objects.githubusercontent.com/github-production-release-asset/1", out _) &&
+                  !UpdateService.IsAllowedGitHubReleaseUrl("http://github.com/Noventra-labs/Kestrel/releases/latest", out _) &&
+                  !UpdateService.IsAllowedGitHubReleaseUrl("https://github.com/Noventra-labs/KestrelEvil/releases/latest", out _) &&
+                  !UpdateService.IsAllowedGitHubReleaseUrl("https://evil.invalid/Kestrel.exe", out _) &&
+                  !UpdateService.IsAllowedGitHubReleaseUrl("https://user:pass@github.com/Noventra-labs/Kestrel", out _),
+                "UpdateService.IsAllowedGitHubReleaseUrl enforces HTTPS and Noventra-labs/Kestrel or githubusercontent origins");
+
+            var untrustedInfo = new UpdateInfo
+            {
+                LatestTag = "v2.5.0",
+                ExecutableUrl = "https://evil.invalid/Kestrel.exe",
+                InstallerUrl = "https://evil.invalid/Kestrel-Setup.exe",
+                HtmlUrl = "file:///C:/evil.exe"
+            };
+            Check(UpdateService.ResolveDownloadTargetUrl(untrustedInfo) == "https://github.com/Noventra-labs/Kestrel/releases/latest",
+                "UpdateService.ResolveDownloadTargetUrl falls back to official GitHub releases URL on untrusted URLs");
+
+            string updDir = Path.Combine(temp, "updater-dir");
+            Directory.CreateDirectory(updDir);
+            string fakeExePath = Path.Combine(updDir, "Kestrel.exe");
+            File.WriteAllText(fakeExePath, "current-binary");
+            UpdateService.ProcessPathOverride = fakeExePath;
+
+            var fakeUpdHandler = new FakeUpdateHttpHandler { Mode = FakeUpdateMode.TrustedRedirectWrongHash };
+            using var fakeUpdClient = new HttpClient(fakeUpdHandler);
+            UpdateService.ApiClient = fakeUpdClient;
+            UpdateService.DownloadClient = fakeUpdClient;
+
+            var missingChecksumRes = await UpdateService.DownloadAndApplyUpdateAsync(new UpdateInfo
+            {
+                LatestTag = "v2.5.0",
+                ExecutableUrl = "https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/Kestrel.exe",
+                ExecutableSha256 = "",
+                ChecksumsUrl = ""
+            });
+            Check(!missingChecksumRes.Started &&
+                  (missingChecksumRes.ErrorMessage?.Contains("SHA-256", StringComparison.OrdinalIgnoreCase) == true) &&
+                  !File.Exists(Path.Combine(updDir, "Kestrel.exe.update")),
+                "UpdateService fails closed and deletes staged file when SHA-256 checksum is missing");
+
+            fakeUpdHandler.Mode = FakeUpdateMode.UntrustedRedirect;
+            var untrustedRedirRes = await UpdateService.DownloadAndApplyUpdateAsync(new UpdateInfo
+            {
+                LatestTag = "v2.5.0",
+                ExecutableUrl = "https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/Kestrel.exe",
+                ExecutableSha256 = new string('a', 64)
+            });
+            Check(!untrustedRedirRes.Started && !File.Exists(Path.Combine(updDir, "Kestrel.exe.update")),
+                "UpdateService blocks redirect to untrusted host");
+
+            fakeUpdHandler.Mode = FakeUpdateMode.TrustedRedirectWrongHash;
+            var badHashRes = await UpdateService.DownloadAndApplyUpdateAsync(new UpdateInfo
+            {
+                LatestTag = "v2.5.0",
+                ExecutableUrl = "https://github.com/Noventra-labs/Kestrel/releases/download/v2.5.0/Kestrel.exe",
+                ExecutableSha256 = new string('0', 64)
+            });
+            Check(!badHashRes.Started &&
+                  (badHashRes.ErrorMessage?.Contains("SHA-256", StringComparison.OrdinalIgnoreCase) == true) &&
+                  !File.Exists(Path.Combine(updDir, "Kestrel.exe.update")),
+                "UpdateService follows trusted githubusercontent redirect, rejects SHA-256 mismatch, and deletes staged payload");
+
+            string sampleHash = "67d1ca0bf4873fc28ee4bd3dc64af5bb28b4c4ee8d21086d888d9b954af5c3da";
+            string verifiedUpdateScript = UpdateService.BuildSelfUpdateScript(
+                Path.Combine(custom, "Kestrel.exe"),
+                Path.Combine(temp, "Kestrel.exe.update"),
+                int.MaxValue,
+                "v2.5.0",
+                sampleHash);
+            Check(verifiedUpdateScript.Contains(".staged", StringComparison.Ordinal) &&
+                  verifiedUpdateScript.Contains("Get-FileHash", StringComparison.Ordinal) &&
+                  verifiedUpdateScript.Contains("ReparsePoint", StringComparison.Ordinal) &&
+                  verifiedUpdateScript.Contains(sampleHash, StringComparison.OrdinalIgnoreCase),
+                "5-arg UpdateService.BuildSelfUpdateScript verifies .staged SHA-256 and checks ReparsePoint");
+
+            var verifiedParseInfo = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+            string verifiedParseCmd = "$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseInput([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" +
+                Convert.ToBase64String(Encoding.UTF8.GetBytes(verifiedUpdateScript)) + "')), [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count) { exit 1 }";
+            verifiedParseInfo.ArgumentList.Add("-NoProfile");
+            verifiedParseInfo.ArgumentList.Add("-EncodedCommand");
+            verifiedParseInfo.ArgumentList.Add(Convert.ToBase64String(Encoding.Unicode.GetBytes(verifiedParseCmd)));
+            using var verifiedParseProc = Process.Start(verifiedParseInfo)!;
+            await verifiedParseProc.WaitForExitAsync();
+            Check(verifiedParseProc.ExitCode == 0, "5-arg verified self-update PowerShell script parses cleanly");
+
+            try { UpdateService.BuildSelfUpdateScript(fakeExePath, fakeExePath + ".update", 1, "2.5.0", "not-hex"); throw new Exception("bad sha256 accepted"); }
+            catch (InvalidOperationException) { Check(true, "BuildSelfUpdateScript rejects non-SHA256 digest"); }
+
+            // 7d. ClipboardService DPAPI Persistence, Legacy Migration, and Exclusion Flag Helper
+            ClipboardService.HistoryFile = Path.Combine(temp, "clipboard_history.json");
+            ClipboardService.LegacyHistoryFile = Path.Combine(temp, "legacy_clipboard_history.json");
+            ClipboardService.ClearHistory();
+            ClipboardService.AddEntry("secret clipboard entry");
+            ClipboardService.SaveHistoryDirect();
+            string clipRaw = File.ReadAllText(ClipboardService.HistoryFile);
+            Check(CloudIdentity.IsProtectedSecret(clipRaw.Trim()) &&
+                  !clipRaw.Contains("secret clipboard entry", StringComparison.Ordinal),
+                "ClipboardService saves clipboard_history.json encrypted via DPAPI");
+
+            File.WriteAllText(ClipboardService.HistoryFile, JsonSerializer.Serialize(new[]
+            {
+                new ClipboardEntry { Text = "migrated secret clip", CopiedAt = DateTime.Now, IsPinned = false }
+            }));
+            ClipboardService.LoadHistory();
+            string upgradedClipRaw = File.ReadAllText(ClipboardService.HistoryFile);
+            Check(ClipboardService.GetEntryCount() == 1 &&
+                  CloudIdentity.IsProtectedSecret(upgradedClipRaw.Trim()) &&
+                  !upgradedClipRaw.Contains("migrated secret clip", StringComparison.Ordinal),
+                "ClipboardService migrates plaintext history file to DPAPI on load");
+
+            Check(ClipboardService.IsHistoryFlagDisabled(new MemoryStream(BitConverter.GetBytes(0))) &&
+                  !ClipboardService.IsHistoryFlagDisabled(new MemoryStream(BitConverter.GetBytes(1))) &&
+                  ClipboardService.IsHistoryFlagDisabled(BitConverter.GetBytes(0)) &&
+                  !ClipboardService.IsHistoryFlagDisabled(BitConverter.GetBytes(1)) &&
+                  ClipboardService.IsHistoryFlagDisabled(0) &&
+                  !ClipboardService.IsHistoryFlagDisabled(1) &&
+                  !ClipboardService.IsHistoryFlagDisabled(null),
+                "ClipboardService.IsHistoryFlagDisabled detects 0 DWORD and permits non-zero / null");
+
+            // 7e. QuickOperationsService Dashed Argument Hardening
+            var dashedArgs = QuickOperationsService.BuildPrivateBrowsingArguments("--incognito", "--gpu-launcher=evil.com");
+            Check(dashedArgs.Length == 2 &&
+                  dashedArgs[1].StartsWith("https://www.google.com/search?q=", StringComparison.Ordinal),
+                "QuickOperationsService treats dash-prefixed tokens with dots as search queries, not URLs");
+
+            // 7f. PowerDeveloperToolsService Temp Cleanup TOCTOU & Input Bounds
+            string cleanupRoot = Path.Combine(temp, "cleanup-root");
+            string outsideDir = Path.Combine(temp, "cleanup-outside");
+            string junctionTarget = Path.Combine(temp, "junction-target");
+            string junctionPath = Path.Combine(cleanupRoot, "sub-junction");
+            Directory.CreateDirectory(cleanupRoot);
+            Directory.CreateDirectory(outsideDir);
+            Directory.CreateDirectory(junctionTarget);
+            string outsideFile = Path.Combine(outsideDir, "keep.tmp");
+            string targetFile = Path.Combine(junctionTarget, "victim.tmp");
+            File.WriteAllBytes(outsideFile, new byte[64]);
+            File.WriteAllBytes(targetFile, new byte[64]);
+
+            var mklink = Process.Start(new ProcessStartInfo("cmd.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                ArgumentList = { "/c", "mklink", "/J", junctionPath, junctionTarget }
+            })!;
+            await mklink.WaitForExitAsync();
+            Check(mklink.ExitCode == 0, "created NTFS test junction for reparse-point tests");
+
+            try
+            {
+                var evilPreview = new TempCleanupPreview(
+                    new List<TempFileCandidate>
+                    {
+                        new(outsideFile, 64, DateTime.UtcNow.AddDays(-2)),
+                        new(Path.Combine(junctionPath, "victim.tmp"), 64, DateTime.UtcNow.AddDays(-2))
+                    },
+                    128,
+                    0,
+                    new[] { cleanupRoot });
+                var evilOutcome = PowerDeveloperToolsService.ExecuteTempFilesCleanup(evilPreview);
+                Check(evilOutcome.DeletedCount == 0 &&
+                      evilOutcome.FailedCount == 2 &&
+                      File.Exists(outsideFile) &&
+                      File.Exists(targetFile),
+                    "PowerDeveloperToolsService.ExecuteTempFilesCleanup blocks out-of-root and junction file deletions");
+            }
+            finally
+            {
+                try { if (Directory.Exists(junctionPath)) Directory.Delete(junctionPath); } catch { }
+            }
+
+            Check(!PowerDeveloperToolsService.TryDecodeJwt(new string('a', 33000), out _, out _, out _) &&
+                  !PowerDeveloperToolsService.TryFormatJson("\"" + new string('x', 2_000_010) + "\"", false, out _, out _) &&
+                  !PowerDeveloperToolsService.EvaluateInline("sha256 " + new string('a', 70000)).IsValid,
+                "PowerDeveloperToolsService enforces size caps on JWT, JSON, and inline hash inputs");
+
+            // 7g. CalculatorService Bounds & Depth Limits
+            var calcOk = CalculatorService.Evaluate("12*(3+4)/7");
+            var calcLong = CalculatorService.Evaluate(string.Join("+", Enumerable.Repeat("1", 140)));
+            var calcDeep = CalculatorService.Evaluate(new string('(', 40) + "1+1" + new string(')', 40));
+            Check(calcOk.IsValid && calcOk.Result == "12" &&
+                  !calcLong.IsValid &&
+                  !calcDeep.IsValid,
+                "CalculatorService evaluates valid arithmetic while rejecting oversized and deeply nested expressions");
+
+            // 7h. MemoryReductService & InstallationFiles Junction Rejection
+            string telTarget = Path.Combine(temp, "tel-real");
+            string telJunction = Path.Combine(temp, "tel-junction");
+            Directory.CreateDirectory(telTarget);
+            var mkTelLink = Process.Start(new ProcessStartInfo("cmd.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                ArgumentList = { "/c", "mklink", "/J", telJunction, telTarget }
+            })!;
+            await mkTelLink.WaitForExitAsync();
+            Check(mkTelLink.ExitCode == 0, "created NTFS telemetry test junction");
+            try
+            {
+                MemoryReductService.HeadlessTelemetryDirectory = telJunction;
+                string juncReqId = MemoryReductService.GenerateCorrelationId();
+                fake.FakeElevated = true;
+                fake.AllowKernelCommands = true;
+                MemoryReductService.ResetPrivilegeCacheForTests();
+                MemoryReductService.ExecuteHeadlessWorker(new[] { MemoryReductService.ArgCleanStandbyLow, "--request-id=" + juncReqId });
+                Check(Directory.GetFiles(telTarget).Length == 0,
+                    "MemoryReductService.ExecuteHeadlessWorker refuses to write telemetry into a directory junction");
+
+                var juncTel = MemoryReductService.ConsumeCorrelatedWorkerTelemetry(juncReqId, MemoryReductService.ArgCleanStandbyLow, DateTime.UtcNow.AddSeconds(-5), DateTime.UtcNow, out string juncReason);
+                Check(juncTel == null && juncReason.Contains("reparse", StringComparison.OrdinalIgnoreCase),
+                    "MemoryReductService.ConsumeCorrelatedWorkerTelemetry rejects junction telemetry directory");
+
+                try { InstallationFiles.ValidateDirectory(telJunction); throw new Exception("junction install dir accepted"); }
+                catch (InvalidOperationException) { Check(true, "InstallationFiles.ValidateDirectory rejects directory junction"); }
+            }
+            finally
+            {
+                fake.FakeElevated = false;
+                fake.AllowKernelCommands = false;
+                MemoryReductService.ResetPrivilegeCacheForTests();
+                try { if (Directory.Exists(telJunction)) Directory.Delete(telJunction); } catch { }
+            }
+
             Console.WriteLine($"{_passed} checks passed.");
         }
         finally
         {
             MemoryReductService.Platform = originalPlatform;
             MemoryReductService.PathInspector = originalInspector;
+            AiClient.Client = originalAiClient;
+            UpdateService.ApiClient = originalUpdateApiClient;
+            UpdateService.DownloadClient = originalUpdateDownloadClient;
+            UpdateService.ProcessPathOverride = originalProcessPathOverride;
+            ClipboardService.HistoryFile = originalHistoryFile;
+            ClipboardService.LegacyHistoryFile = originalLegacyHistoryFile;
             MemoryReductService.ResetPrivilegeCacheForTests();
             try { Directory.Delete(temp, recursive: true); } catch { }
         }
@@ -1284,6 +1563,36 @@ internal static class Program
         public void Wait(int milliseconds, CancellationToken cancellationToken) { }
     }
 
+    private enum FakeUpdateMode
+    {
+        UntrustedRedirect,
+        TrustedRedirectWrongHash
+    }
+
+    private sealed class FakeUpdateHttpHandler : HttpMessageHandler
+    {
+        public FakeUpdateMode Mode { get; set; } = FakeUpdateMode.UntrustedRedirect;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            string url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+            if (url.StartsWith("https://github.com/Noventra-labs/Kestrel/releases/download/", StringComparison.OrdinalIgnoreCase))
+            {
+                var redirectTarget = Mode == FakeUpdateMode.UntrustedRedirect
+                    ? new Uri("https://evil.invalid/payload.exe")
+                    : new Uri("https://objects.githubusercontent.com/github-production-release-asset/fake-kestrel.exe");
+                var redir = new HttpResponseMessage(HttpStatusCode.Found);
+                redir.Headers.Location = redirectTarget;
+                return Task.FromResult(redir);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(Encoding.UTF8.GetBytes("fake-kestrel-payload"))
+            });
+        }
+    }
+
     private sealed class FakeCloud : HttpMessageHandler
     {
         public bool SecureBackend = true;
@@ -1292,12 +1601,16 @@ internal static class Program
         public int Posts;
         public string LastAuthorization = "";
         public string LastBody = "";
+        public string LastUri = "";
+        public string LastGoogApiKey = "";
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (request.Method == HttpMethod.Get)
                 return new(HttpStatusCode.OK) { Content = new StringContent(SecureBackend ? "{\"auth_scheme\":\"installation-bearer-v1\"}" : "{}") };
             Posts++;
+            LastUri = request.RequestUri?.AbsoluteUri ?? "";
             LastAuthorization = request.Headers.Authorization?.ToString() ?? "";
+            LastGoogApiKey = request.Headers.TryGetValues("x-goog-api-key", out var vals) ? string.Join(",", vals) : "";
             LastBody = await request.Content!.ReadAsStringAsync(cancellationToken);
             if (request.RequestUri!.AbsolutePath.EndsWith("/v1/keys"))
                 return new(StorageStatus) { Content = new StringContent(JsonSerializer.Serialize(new { supabase_synced = Persistence })) };

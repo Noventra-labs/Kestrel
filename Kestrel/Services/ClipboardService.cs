@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Kestrel.Interop;
 using Kestrel.Models;
@@ -17,17 +18,28 @@ namespace Kestrel.Services
 
     public static class ClipboardService
     {
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern uint RegisterClipboardFormat(string lpszFormat);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsClipboardFormatAvailable(uint format);
+
+        private static readonly uint CfExcludeMonitor = RegisterClipboardFormat("ExcludeClipboardContentFromMonitorProcessing");
+        private static readonly uint CfClipboardViewerIgnore = RegisterClipboardFormat("Clipboard Viewer Ignore");
+        private static readonly uint CfCanIncludeInHistory = RegisterClipboardFormat("CanIncludeInClipboardHistory");
+
         private static readonly List<ClipboardEntry> Entries = new();
         private static string _lastText = string.Empty;
         private static IntPtr _registeredHwnd = IntPtr.Zero;
         private const int MaxEntryCharacters = 65536; // 64 KB cap per clip
 
-        private static readonly string HistoryFile = Path.Combine(
+        internal static string HistoryFile { get; set; } = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Kestrel",
             "clipboard_history.json");
 
-        private static readonly string LegacyHistoryFile = Path.Combine(
+        internal static string LegacyHistoryFile { get; set; } = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Beam",
             "clipboard_history.json");
@@ -53,17 +65,85 @@ namespace Kestrel.Services
             SaveHistoryDirect();
         }
 
+        internal static bool IsHistoryFlagDisabled(object? data)
+        {
+            if (data is MemoryStream ms)
+            {
+                byte[] bytes = ms.ToArray();
+                if (bytes.Length >= 4) return BitConverter.ToInt32(bytes, 0) == 0;
+                if (bytes.Length > 0) return bytes[0] == 0;
+                return false;
+            }
+
+            if (data is byte[] arr)
+            {
+                if (arr.Length >= 4) return BitConverter.ToInt32(arr, 0) == 0;
+                if (arr.Length > 0) return arr[0] == 0;
+                return false;
+            }
+
+            if (data is int iv) return iv == 0;
+            if (data is uint uv) return uv == 0;
+            if (data is bool bv) return !bv;
+            return false;
+        }
+
+        private static bool IsClipboardExcluded()
+        {
+            if ((CfExcludeMonitor != 0 && IsClipboardFormatAvailable(CfExcludeMonitor)) ||
+                (CfClipboardViewerIgnore != 0 && IsClipboardFormatAvailable(CfClipboardViewerIgnore)))
+            {
+                return true;
+            }
+
+            if (CfCanIncludeInHistory != 0 && IsClipboardFormatAvailable(CfCanIncludeInHistory))
+            {
+                try
+                {
+                    object? flag = System.Windows.Clipboard.GetData("CanIncludeInClipboardHistory");
+                    if (IsHistoryFlagDisabled(flag))
+                        return true;
+                }
+                catch
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static void SetSensitiveText(string text)
+        {
+            lock (Entries)
+            {
+                _lastText = text;
+            }
+
+            var data = new System.Windows.DataObject();
+            data.SetText(text);
+            data.SetData("ExcludeClipboardContentFromMonitorProcessing", new MemoryStream());
+            data.SetData("CanIncludeInClipboardHistory", new MemoryStream(BitConverter.GetBytes(0)));
+            System.Windows.Clipboard.SetDataObject(data, true);
+        }
+
         public static void OnClipboardUpdated()
         {
             if (!KestrelSettings.Current.EnableClipboardHistory) return;
             try
             {
+                if (IsClipboardExcluded()) return;
+
                 if (System.Windows.Clipboard.ContainsText())
                 {
                     var text = System.Windows.Clipboard.GetText();
-                    if (!string.IsNullOrWhiteSpace(text) && text != _lastText)
+                    if (!string.IsNullOrWhiteSpace(text))
                     {
-                        _lastText = text;
+                        lock (Entries)
+                        {
+                            if (text == _lastText) return;
+                            _lastText = text;
+                        }
                         AddEntry(text);
                     }
                 }
@@ -84,33 +164,45 @@ namespace Kestrel.Services
                 trimmed = trimmed[..MaxEntryCharacters] + "\n...[truncated: clip exceeds 64KB]";
             }
 
-            var existing = Entries.FirstOrDefault(x => x.Text == trimmed);
-            bool wasPinned = existing?.IsPinned ?? false;
-
-            Entries.RemoveAll(x => x.Text == trimmed);
-            Entries.Insert(0, new ClipboardEntry
+            lock (Entries)
             {
-                Text = trimmed,
-                CopiedAt = DateTime.Now,
-                IsPinned = wasPinned
-            });
+                var existing = Entries.FirstOrDefault(x => x.Text == trimmed);
+                bool wasPinned = existing?.IsPinned ?? false;
 
-            // Sort pinned items first
-            var sorted = Entries.OrderByDescending(x => x.IsPinned).ThenByDescending(x => x.CopiedAt).ToList();
-            Entries.Clear();
-            Entries.AddRange(sorted.Take(60));
+                Entries.RemoveAll(x => x.Text == trimmed);
+                Entries.Insert(0, new ClipboardEntry
+                {
+                    Text = trimmed,
+                    CopiedAt = DateTime.Now,
+                    IsPinned = wasPinned
+                });
+
+                // Sort pinned items first
+                var sorted = Entries.OrderByDescending(x => x.IsPinned).ThenByDescending(x => x.CopiedAt).ToList();
+                Entries.Clear();
+                Entries.AddRange(sorted.Take(60));
+            }
 
             ScheduleSaveHistory();
         }
 
         public static void ClearHistory()
         {
-            Entries.Clear();
-            _lastText = string.Empty;
+            lock (Entries)
+            {
+                Entries.Clear();
+                _lastText = string.Empty;
+            }
             SaveHistoryDirect();
         }
 
-        public static int GetEntryCount() => Entries.Count;
+        public static int GetEntryCount()
+        {
+            lock (Entries)
+            {
+                return Entries.Count;
+            }
+        }
 
         public static List<LauncherItem> GetClipboardLauncherItems(string filter, Action onDone)
         {
@@ -118,9 +210,13 @@ namespace Kestrel.Services
             var iconPin = IconGenerator.GetSquircleIcon(SquircleTheme.GoldStar, IconGenerator.PathStar);
             var list = new List<LauncherItem>();
 
-            var source = string.IsNullOrWhiteSpace(filter)
-                ? Entries
-                : Entries.Where(e => e.Text.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            List<ClipboardEntry> source;
+            lock (Entries)
+            {
+                source = string.IsNullOrWhiteSpace(filter)
+                    ? new List<ClipboardEntry>(Entries)
+                    : Entries.Where(e => e.Text.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
 
             foreach (var entry in source)
             {
@@ -140,7 +236,10 @@ namespace Kestrel.Services
                     Icon = entry.IsPinned ? iconPin : iconClip,
                     Action = () =>
                     {
-                        _lastText = entry.Text;
+                        lock (Entries)
+                        {
+                            _lastText = entry.Text;
+                        }
                         onDone();
                         DwmApi.PasteTextToPreviousWindow(entry.Text);
                     }
@@ -172,7 +271,7 @@ namespace Kestrel.Services
             return dt.ToString("MMM d, HH:mm");
         }
 
-        private static void LoadHistory()
+        internal static void LoadHistory()
         {
             try
             {
@@ -184,17 +283,25 @@ namespace Kestrel.Services
 
                 if (File.Exists(targetFile))
                 {
-                    var json = File.ReadAllText(targetFile);
-                    var loaded = JsonSerializer.Deserialize<List<ClipboardEntry>>(json);
-                    if (loaded != null)
+                    var raw = File.ReadAllText(targetFile).Trim();
+                    bool wasProtected = CloudIdentity.IsProtectedSecret(raw);
+                    string json = wasProtected ? CloudIdentity.UnprotectSecret(raw) : raw;
+                    if (!string.IsNullOrWhiteSpace(json))
                     {
-                        Entries.Clear();
-                        Entries.AddRange(loaded);
-                        if (Entries.Count > 0) _lastText = Entries[0].Text;
+                        var loaded = JsonSerializer.Deserialize<List<ClipboardEntry>>(json);
+                        if (loaded != null)
+                        {
+                            lock (Entries)
+                            {
+                                Entries.Clear();
+                                Entries.AddRange(loaded);
+                                _lastText = Entries.Count > 0 ? Entries[0].Text : string.Empty;
+                            }
+                        }
                     }
 
-                    // If loaded from legacy, persist to new Kestrel path
-                    if (targetFile == LegacyHistoryFile)
+                    // Upgrade legacy path or plaintext history on disk to DPAPI-encrypted storage.
+                    if (string.Equals(targetFile, LegacyHistoryFile, StringComparison.OrdinalIgnoreCase) || !wasProtected)
                     {
                         SaveHistoryDirect();
                     }
@@ -221,7 +328,7 @@ namespace Kestrel.Services
             }
         }
 
-        private static void SaveHistoryDirect()
+        internal static void SaveHistoryDirect()
         {
             try
             {
@@ -236,7 +343,17 @@ namespace Kestrel.Services
                 }
 
                 var json = JsonSerializer.Serialize(snapshot);
-                File.WriteAllText(HistoryFile, json);
+                var protectedPayload = CloudIdentity.ProtectSecret(json);
+                string tempFile = Path.Combine(dir ?? Path.GetTempPath(), $".clip-{Guid.NewGuid():N}.tmp");
+                try
+                {
+                    File.WriteAllText(tempFile, protectedPayload);
+                    File.Move(tempFile, HistoryFile, overwrite: true);
+                }
+                finally
+                {
+                    try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+                }
             }
             catch { }
         }

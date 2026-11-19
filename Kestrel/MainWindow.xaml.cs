@@ -55,6 +55,7 @@ namespace Kestrel
         private MemoryCleanResult? _lastMemResult;
         private bool _isMemOperationRunning = false;
         private int? _pendingPortKillPid;
+        private string _pendingPortKillProcessName = string.Empty;
         private string _pendingPortKillLabel = string.Empty;
         private TempCleanupPreview? _pendingTempPreview;
         private List<HungWindowInfo>? _pendingHungPreview;
@@ -626,6 +627,7 @@ namespace Kestrel
         private void OpenPortInspector(string initialFilter)
         {
             _pendingPortKillPid = null;
+            _pendingPortKillProcessName = string.Empty;
             _pendingPortKillLabel = string.Empty;
             SwitchMode(LauncherMode.PortInspector);
             if (!string.IsNullOrWhiteSpace(initialFilter))
@@ -641,6 +643,7 @@ namespace Kestrel
             if (mode != LauncherMode.PortInspector)
             {
                 _pendingPortKillPid = null;
+                _pendingPortKillProcessName = string.Empty;
                 _pendingPortKillLabel = string.Empty;
             }
             if (mode == LauncherMode.TempCleanupPreview)
@@ -1020,7 +1023,10 @@ namespace Kestrel
                 default:
                     if (!string.IsNullOrEmpty(dev.Result))
                     {
-                        System.Windows.Clipboard.SetText(dev.Result);
+                        if (dev.Category == "Password Generator")
+                            ClipboardService.SetSensitiveText(dev.Result);
+                        else
+                            System.Windows.Clipboard.SetText(dev.Result);
                         ToastNotification.Show($"✓ Copied {dev.Category}");
                     }
                     return;
@@ -1318,6 +1324,7 @@ namespace Kestrel
                 if (_pendingPortKillPid.HasValue)
                 {
                     int targetPid = _pendingPortKillPid.Value;
+                    string targetProcessName = _pendingPortKillProcessName;
                     string targetLabel = _pendingPortKillLabel;
                     items.Add(new LauncherItem
                     {
@@ -1332,18 +1339,19 @@ namespace Kestrel
                         {
                             try
                             {
-                                using var proc = System.Diagnostics.Process.GetProcessById(targetPid);
-                                string name = proc.ProcessName;
-                                proc.Kill();
-                                ToastNotification.Show($"✓ Terminated {name} (PID {targetPid})");
-                            }
-                            catch (Exception ex)
-                            {
-                                ToastNotification.Show($"Could not terminate PID {targetPid}: {ex.Message}");
+                                if (SystemCommandsService.TryKillProcessVerified(targetPid, targetProcessName, out string? err))
+                                {
+                                    ToastNotification.Show($"✓ Terminated {targetProcessName} (PID {targetPid})");
+                                }
+                                else
+                                {
+                                    ToastNotification.Show($"Could not terminate PID {targetPid}: {err}");
+                                }
                             }
                             finally
                             {
                                 _pendingPortKillPid = null;
+                                _pendingPortKillProcessName = string.Empty;
                                 _pendingPortKillLabel = string.Empty;
                                 UpdateFilter();
                             }
@@ -1362,6 +1370,7 @@ namespace Kestrel
                         Action = () =>
                         {
                             _pendingPortKillPid = null;
+                            _pendingPortKillProcessName = string.Empty;
                             _pendingPortKillLabel = string.Empty;
                             UpdateFilter();
                         }
@@ -1393,6 +1402,7 @@ namespace Kestrel
                             }
 
                             _pendingPortKillPid = binding.Pid;
+                            _pendingPortKillProcessName = binding.ProcessName;
                             _pendingPortKillLabel = $"{binding.ProcessName} ({binding.Protocol} :{binding.LocalPort})";
                             UpdateFilter();
                         }
@@ -1612,13 +1622,8 @@ namespace Kestrel
                         int killed = 0;
                         foreach (var h in list)
                         {
-                            try
-                            {
-                                using var proc = System.Diagnostics.Process.GetProcessById(h.Pid);
-                                proc.Kill();
+                            if (SystemCommandsService.TryKillProcessVerified(h.Pid, h.ProcessName, out _))
                                 killed++;
-                            }
-                            catch { }
                         }
                         ToastNotification.Show($"✓ Terminated {killed}/{list.Count} unresponsive app(s)");
                         _pendingHungPreview = null;
@@ -1657,15 +1662,13 @@ namespace Kestrel
                         KeepOpenOnExecute = true,
                         Action = () =>
                         {
-                            try
+                            if (SystemCommandsService.TryKillProcessVerified(hungItem.Pid, hungItem.ProcessName, out string? err))
                             {
-                                using var proc = System.Diagnostics.Process.GetProcessById(hungItem.Pid);
-                                proc.Kill();
                                 ToastNotification.Show($"✓ Terminated {hungItem.ProcessName} (PID {hungItem.Pid})");
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                ToastNotification.Show($"Could not terminate {hungItem.ProcessName}: {ex.Message}");
+                                ToastNotification.Show($"Could not terminate {hungItem.ProcessName}: {err}");
                             }
                             _pendingHungPreview = null;
                             UpdateHungAppsPreviewFilter(string.Empty);
@@ -1871,6 +1874,7 @@ namespace Kestrel
                 if (_currentMode == LauncherMode.PortInspector && _pendingPortKillPid.HasValue)
                 {
                     _pendingPortKillPid = null;
+                    _pendingPortKillProcessName = string.Empty;
                     _pendingPortKillLabel = string.Empty;
                     UpdateFilter();
                     return;
@@ -2246,7 +2250,7 @@ namespace Kestrel
             _selectedSettingsProvider = string.IsNullOrWhiteSpace(_settings.ActiveAiProvider)
                 ? "gemini"
                 : _settings.ActiveAiProvider;
-            TxtApiKeyOverride.Text = _settings.GetApiKeyForProvider(_selectedSettingsProvider);
+            TxtApiKeyOverride.Password = _settings.GetApiKeyForProvider(_selectedSettingsProvider);
             RefreshProviderPillsUi();
 
             // Tab 4: Telemetry
@@ -2492,10 +2496,10 @@ namespace Kestrel
             _settings.AutoMemReductEnabled = ChkAutoMemReduct.IsChecked == true;
             _settings.EnablePowerTools = ChkEnablePowerTools.IsChecked == true;
 
-            _settings.CloudBackendUrl = string.IsNullOrWhiteSpace(TxtCloudUrl.Text) ? "http://localhost:8080" : TxtCloudUrl.Text.Trim();
+            _settings.CloudBackendUrl = TxtCloudUrl.Text.Trim();
             _settings.DefaultAiModel = TxtAiModel.Text.Trim();
             _settings.ActiveAiProvider = _selectedSettingsProvider;
-            _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Text.Trim());
+            _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Password.Trim());
         }
 
         private void ProviderPill_Click(object sender, MouseButtonEventArgs e)
@@ -2504,15 +2508,15 @@ namespace Kestrel
 
             if (!_isLoadingSettingsUi)
             {
-                _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Text.Trim());
+                _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Password.Trim());
             }
 
             _isLoadingSettingsUi = true;
             _selectedSettingsProvider = providerId;
             _settings.ActiveAiProvider = providerId;
 
-            TxtApiKeyOverride.Text = _settings.GetApiKeyForProvider(providerId);
-            _settings.UserApiKeyOverride = TxtApiKeyOverride.Text;
+            TxtApiKeyOverride.Password = _settings.GetApiKeyForProvider(providerId);
+            _settings.UserApiKeyOverride = TxtApiKeyOverride.Password;
             _isLoadingSettingsUi = false;
 
             _settings.Save(notify: true);
@@ -2522,10 +2526,10 @@ namespace Kestrel
             SettingsSavedNotice.Text = $"Active provider: {providerId.ToUpperInvariant()}";
         }
 
-        private void TxtApiKeyOverride_TextChanged(object sender, TextChangedEventArgs e)
+        private void TxtApiKeyOverride_PasswordChanged(object sender, RoutedEventArgs e)
         {
             if (_isLoadingSettingsUi) return;
-            _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Text.Trim());
+            _settings.SetApiKeyForProvider(_selectedSettingsProvider, TxtApiKeyOverride.Password.Trim());
             RefreshProviderPillsUi();
         }
 
@@ -2535,7 +2539,7 @@ namespace Kestrel
             _settings.Save(notify: true);
             RefreshProviderPillsUi();
 
-            bool hasKey = !string.IsNullOrWhiteSpace(TxtApiKeyOverride.Text);
+            bool hasKey = !string.IsNullOrWhiteSpace(TxtApiKeyOverride.Password);
             TxtSaveLocalKeyBtn.Text = hasKey ? "Saved" : "Save";
             SettingsSavedNotice.Text = hasKey
                 ? $"Saved {_selectedSettingsProvider.ToUpperInvariant()} key locally"
@@ -2549,7 +2553,7 @@ namespace Kestrel
         private void ClearProviderKey_Click(object sender, MouseButtonEventArgs e)
         {
             _isLoadingSettingsUi = true;
-            TxtApiKeyOverride.Text = string.Empty;
+            TxtApiKeyOverride.Password = string.Empty;
             _isLoadingSettingsUi = false;
 
             _settings.SetApiKeyForProvider(_selectedSettingsProvider, string.Empty);

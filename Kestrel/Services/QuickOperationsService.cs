@@ -143,6 +143,7 @@ namespace Kestrel.Services
 
             if (!val.Contains(' ') &&
                 val.Contains('.') &&
+                !val.StartsWith('-') &&
                 !val.StartsWith('.') &&
                 !val.EndsWith('.') &&
                 Uri.TryCreate("https://" + val, UriKind.Absolute, out var hostUri))
@@ -227,7 +228,7 @@ namespace Kestrel.Services
 
         private static string? ResolveBrowserExecutable(BrowserSpec spec)
         {
-            foreach (var root in new[] { Registry.CurrentUser, Registry.LocalMachine })
+            foreach (var root in new[] { Registry.LocalMachine, Registry.CurrentUser })
             {
                 try
                 {
@@ -235,7 +236,9 @@ namespace Kestrel.Services
                     if (key?.GetValue(null) is string regPath)
                     {
                         string cleaned = regPath.Trim().Trim('"');
-                        if (File.Exists(cleaned))
+                        if (Path.IsPathFullyQualified(cleaned) &&
+                            cleaned.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                            File.Exists(cleaned))
                             return cleaned;
                     }
                 }

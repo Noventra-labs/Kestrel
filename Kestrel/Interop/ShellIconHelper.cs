@@ -221,7 +221,7 @@ namespace Kestrel.Interop
             if (IconCache.TryGetValue(path, out var cached))
                 return cached;
 
-            if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase))
+            if ((!Path.IsPathFullyQualified(path) && path.Contains('!')) || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase))
             {
                 return GetUwpIcon(path);
             }

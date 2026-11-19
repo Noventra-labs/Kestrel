@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -83,21 +84,144 @@ namespace Kestrel.Services
             var asmVersion = assembly.GetName().Version;
             return asmVersion != null ? NormalizeVersion(asmVersion) : new Version(0, 0, 0);
         }
-        private static readonly HttpClient _httpClient = new HttpClient();
-        private static readonly HttpClient _downloadClient = new HttpClient();
+        private const string FallbackReleaseUrl = "https://github.com/Noventra-labs/Kestrel/releases/latest";
+
+        private static HttpClient CreateHttpClient(TimeSpan timeout)
+        {
+            var client = new HttpClient(new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false
+            })
+            {
+                Timeout = timeout
+            };
+            string ua = $"Kestrel-Client/{CurrentVersion} (Windows NT 10.0; Win64; x64)";
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(ua);
+            return client;
+        }
+
+        internal static HttpClient ApiClient { get; set; } = CreateHttpClient(TimeSpan.FromSeconds(6));
+        internal static HttpClient DownloadClient { get; set; } = CreateHttpClient(TimeSpan.FromMinutes(10));
+        internal static string? ProcessPathOverride { get; set; }
+
         private static DateTime _lastCheckTime = DateTime.MinValue;
         public static UpdateInfo? CachedUpdateInfo { get; private set; }
 
         private const string UninstallRegPath = @"HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Kestrel_NoventraLabs";
 
-        static UpdateService()
+        internal static bool IsAllowedGitHubReleaseUrl(string? raw, out Uri? uri)
         {
-            string ua = $"Kestrel-Client/{CurrentVersion} (Windows NT 10.0; Win64; x64)";
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(ua);
-            _httpClient.Timeout = TimeSpan.FromSeconds(6);
+            uri = null;
+            if (string.IsNullOrWhiteSpace(raw) ||
+                !Uri.TryCreate(raw.Trim(), UriKind.Absolute, out var parsed) ||
+                !string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrEmpty(parsed.UserInfo))
+            {
+                return false;
+            }
 
-            _downloadClient.DefaultRequestHeaders.UserAgent.ParseAdd(ua);
-            _downloadClient.Timeout = TimeSpan.FromMinutes(10);
+            string host = parsed.Host;
+            bool allowed =
+                ((host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+                  host.Equals("www.github.com", StringComparison.OrdinalIgnoreCase)) &&
+                 (parsed.AbsolutePath.Equals("/Noventra-labs/Kestrel", StringComparison.OrdinalIgnoreCase) ||
+                  parsed.AbsolutePath.StartsWith("/Noventra-labs/Kestrel/", StringComparison.OrdinalIgnoreCase))) ||
+                (host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase) &&
+                 parsed.AbsolutePath.StartsWith("/repos/Noventra-labs/Kestrel/", StringComparison.OrdinalIgnoreCase)) ||
+                IsGitHubContentHost(host);
+
+            if (!allowed)
+                return false;
+
+            uri = parsed;
+            return true;
+        }
+
+        internal static bool IsAllowedDownloadRedirect(Uri uri)
+        {
+            if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrEmpty(uri.UserInfo))
+            {
+                return false;
+            }
+
+            string host = uri.Host;
+            return host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+                   host.Equals("www.github.com", StringComparison.OrdinalIgnoreCase) ||
+                   host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase) ||
+                   IsGitHubContentHost(host);
+        }
+
+        private static bool IsGitHubContentHost(string host) =>
+            host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase) &&
+            host.Length > ".githubusercontent.com".Length;
+
+        private static async Task<HttpResponseMessage> SendWithTrustedRedirectsAsync(
+            HttpClient client,
+            Uri uri,
+            HttpCompletionOption completionOption,
+            CancellationToken cancellationToken)
+        {
+            Uri current = uri;
+            for (int hop = 0; hop <= 5; hop++)
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, current);
+                var res = await client.SendAsync(req, completionOption, cancellationToken);
+
+                if (res.StatusCode is HttpStatusCode.MovedPermanently or
+                    HttpStatusCode.Found or
+                    HttpStatusCode.SeeOther or
+                    HttpStatusCode.TemporaryRedirect or
+                    HttpStatusCode.PermanentRedirect)
+                {
+                    var loc = res.Headers.Location;
+                    res.Dispose();
+
+                    if (loc == null)
+                        throw new HttpRequestException("Redirect response missing Location header.");
+                    if (hop == 5)
+                        throw new HttpRequestException("Too many redirects during update request.");
+
+                    Uri next = loc.IsAbsoluteUri ? loc : new Uri(current, loc);
+                    if (!IsAllowedDownloadRedirect(next))
+                        throw new HttpRequestException($"Blocked untrusted update redirect to '{next.Host}'.");
+
+                    current = next;
+                    continue;
+                }
+
+                return res;
+            }
+
+            throw new HttpRequestException("Too many redirects during update request.");
+        }
+
+        private static async Task<string> GetStringBoundedAsync(
+            HttpClient client,
+            Uri uri,
+            int maxBytes,
+            CancellationToken cancellationToken)
+        {
+            using var response = await SendWithTrustedRedirectsAsync(client, uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            if (response.Content.Headers.ContentLength is long contentLength && contentLength > maxBytes)
+                throw new InvalidDataException($"Update payload exceeds {maxBytes} bytes.");
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var ms = new MemoryStream();
+            byte[] buffer = new byte[8192];
+            int total = 0;
+            int read;
+            while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                if (total + read > maxBytes)
+                    throw new InvalidDataException($"Update payload exceeds {maxBytes} bytes.");
+                ms.Write(buffer, 0, read);
+                total += read;
+            }
+
+            return Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
         }
 
         public static async Task<UpdateInfo?> CheckForUpdatesAsync(bool force = false)
@@ -110,7 +234,8 @@ namespace Kestrel.Services
             try
             {
                 _lastCheckTime = DateTime.UtcNow;
-                var res = await _httpClient.GetStringAsync("https://api.github.com/repos/Noventra-labs/Kestrel/releases/latest");
+                var releaseApiUri = new Uri("https://api.github.com/repos/Noventra-labs/Kestrel/releases/latest");
+                var res = await GetStringBoundedAsync(ApiClient, releaseApiUri, 1024 * 1024, CancellationToken.None);
                 CachedUpdateInfo = ParseReleaseJson(res, CurrentVersion);
                 return CachedUpdateInfo;
             }
@@ -189,18 +314,18 @@ namespace Kestrel.Services
         internal static string ResolveDownloadTargetUrl(UpdateInfo? info)
         {
             if (info == null)
-                return "https://github.com/Noventra-labs/Kestrel/releases/latest";
+                return FallbackReleaseUrl;
 
-            if (!string.IsNullOrWhiteSpace(info.ExecutableUrl))
+            if (IsAllowedGitHubReleaseUrl(info.ExecutableUrl, out _))
                 return info.ExecutableUrl;
 
-            if (!string.IsNullOrWhiteSpace(info.InstallerUrl))
+            if (IsAllowedGitHubReleaseUrl(info.InstallerUrl, out _))
                 return info.InstallerUrl;
 
-            if (!string.IsNullOrWhiteSpace(info.HtmlUrl))
+            if (IsAllowedGitHubReleaseUrl(info.HtmlUrl, out _))
                 return info.HtmlUrl;
 
-            return "https://github.com/Noventra-labs/Kestrel/releases/latest";
+            return FallbackReleaseUrl;
         }
 
         internal static string? ParseChecksumForAsset(string checksumsContent, string fileName)
@@ -366,7 +491,7 @@ namespace Kestrel.Services
                 if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
                     return;
 
-                foreach (string artifactName in new[] { "Kestrel.exe.old", "Kestrel.exe.update" })
+                foreach (string artifactName in new[] { "Kestrel.exe.old", "Kestrel.exe.update", "Kestrel.exe.staged" })
                 {
                     string candidate = Path.Combine(dir, artifactName);
                     if (File.Exists(candidate))
@@ -378,12 +503,19 @@ namespace Kestrel.Services
             catch { }
         }
 
-        internal static string BuildSelfUpdateScript(string currentExePath, string stagedExePath, int processId, string? newDisplayVersion)
+        internal static string BuildSelfUpdateScript(
+            string currentExePath,
+            string stagedExePath,
+            int processId,
+            string? newDisplayVersion,
+            string? expectedSha256 = null)
         {
             if (!Path.IsPathFullyQualified(currentExePath))
                 throw new InvalidOperationException("Current executable path must be fully qualified.");
             if (!Path.IsPathFullyQualified(stagedExePath))
                 throw new InvalidOperationException("Staged executable path must be fully qualified.");
+            if (expectedSha256 != null && !IsSha256Hex(expectedSha256))
+                throw new InvalidOperationException("Expected SHA-256 digest must be 64 hexadecimal characters.");
 
             string fullCurrent = Path.GetFullPath(currentExePath);
             string fullStaged = Path.GetFullPath(stagedExePath);
@@ -401,14 +533,36 @@ namespace Kestrel.Services
                 ? $"@('--replace', '--updated', {Quote(cleanVersion)})"
                 : "'--replace'";
 
+            string sourcePath = fullStaged;
+            string verifyBlock = string.Empty;
+            string cleanupStaged = string.Empty;
+
+            if (expectedSha256 != null)
+            {
+                string verifiedPath = fullCurrent + ".staged";
+                sourcePath = verifiedPath;
+                verifyBlock =
+                    $"$stagedFile = {Quote(fullStaged)}; " +
+                    $"$verified = {Quote(verifiedPath)}; " +
+                    "$stagedItem = Get-Item -LiteralPath $stagedFile -Force; " +
+                    "if ($stagedItem.PSIsContainer -or ($stagedItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { exit 2 }; " +
+                    "if (Test-Path -LiteralPath $verified) { Remove-Item -LiteralPath $verified -Force }; " +
+                    "Copy-Item -LiteralPath $stagedFile -Destination $verified -Force; " +
+                    "$actualHash = (Get-FileHash -LiteralPath $verified -Algorithm SHA256).Hash; " +
+                    $"if ($actualHash -ine {Quote(expectedSha256)}) {{ Remove-Item -LiteralPath $verified -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $stagedFile -Force -ErrorAction SilentlyContinue; exit 2 }}; " +
+                    $"if (Test-Path -LiteralPath {Quote(fullCurrent)} -PathType Leaf) {{ $curItem = Get-Item -LiteralPath {Quote(fullCurrent)} -Force; if ($curItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {{ Remove-Item -LiteralPath $verified -Force -ErrorAction SilentlyContinue; exit 2 }} }}; ";
+                cleanupStaged = "Remove-Item -LiteralPath $stagedFile -Force -ErrorAction SilentlyContinue; ";
+            }
+
             return "$ErrorActionPreference = 'Stop'; " +
                 $"Wait-Process -Id {processId} -Timeout 20 -ErrorAction SilentlyContinue; " +
+                verifyBlock +
                 "$moved = $false; " +
                 $"$backup = {Quote(backupPath)}; " +
                 "for ($i = 0; $i -lt 30; $i++) { " +
                 "try { " +
                 $"if (Test-Path -LiteralPath {Quote(fullCurrent)} -PathType Leaf) {{ Move-Item -LiteralPath {Quote(fullCurrent)} -Destination $backup -Force }}; " +
-                $"Move-Item -LiteralPath {Quote(fullStaged)} -Destination {Quote(fullCurrent)} -Force; " +
+                $"Move-Item -LiteralPath {Quote(sourcePath)} -Destination {Quote(fullCurrent)} -Force; " +
                 "$moved = $true; break " +
                 "} catch { " +
                 $"if ((Test-Path -LiteralPath $backup -PathType Leaf) -and -not (Test-Path -LiteralPath {Quote(fullCurrent)} -PathType Leaf)) {{ " +
@@ -416,6 +570,7 @@ namespace Kestrel.Services
                 "Start-Sleep -Milliseconds 200 } }; " +
                 "if (-not $moved) { exit 1 }; " +
                 "Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue; " +
+                cleanupStaged +
                 regUpdate +
                 $"Start-Process -FilePath {Quote(fullCurrent)} -ArgumentList {relaunchArgs}";
         }
@@ -425,14 +580,12 @@ namespace Kestrel.Services
             IProgress<UpdateProgressReport>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(info.ExecutableUrl) ||
-                !Uri.TryCreate(info.ExecutableUrl, UriKind.Absolute, out var downloadUri) ||
-                !string.Equals(downloadUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            if (!IsAllowedGitHubReleaseUrl(info.ExecutableUrl, out var downloadUri) || downloadUri == null)
             {
                 return new SelfUpdateResult(false, false, "No direct executable update URL available.");
             }
 
-            string? currentExePath = Environment.ProcessPath;
+            string? currentExePath = ProcessPathOverride ?? Environment.ProcessPath;
             if (!IsStandaloneKestrelExe(currentExePath) || string.IsNullOrWhiteSpace(currentExePath))
             {
                 return new SelfUpdateResult(false, false, "Self-update is only supported when running Kestrel.exe directly.");
@@ -448,8 +601,16 @@ namespace Kestrel.Services
             else
             {
                 string tempDir = Path.Combine(Path.GetTempPath(), "Kestrel-Update");
+                if (Directory.Exists(tempDir) && (File.GetAttributes(tempDir) & FileAttributes.ReparsePoint) != 0)
+                {
+                    return new SelfUpdateResult(false, false, "Update staging directory cannot be a reparse point.");
+                }
                 Directory.CreateDirectory(tempDir);
                 stagedPath = Path.Combine(tempDir, "Kestrel.exe.update");
+                if (File.Exists(stagedPath) && (File.GetAttributes(stagedPath) & FileAttributes.ReparsePoint) != 0)
+                {
+                    return new SelfUpdateResult(false, false, "Update staging file cannot be a reparse point.");
+                }
             }
 
             try
@@ -457,7 +618,7 @@ namespace Kestrel.Services
                 if (File.Exists(stagedPath))
                     File.Delete(stagedPath);
 
-                using var response = await _downloadClient.GetAsync(downloadUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                using var response = await SendWithTrustedRedirectsAsync(DownloadClient, downloadUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 long totalBytes = response.Content.Headers.ContentLength ?? info.ExecutableSizeBytes;
@@ -491,44 +652,47 @@ namespace Kestrel.Services
 
                 progress?.Report(new UpdateProgressReport(UpdateStage.Verifying, downloaded, totalBytes > 0 ? totalBytes : downloaded, 100));
 
-                // Verify SHA-256 checksum if available from release metadata or checksums.txt
+                // Fail closed: always require a valid SHA-256 digest from release metadata or checksums.txt.
                 string? expectedHash = !string.IsNullOrWhiteSpace(info.ExecutableSha256)
-                    ? info.ExecutableSha256
+                    ? info.ExecutableSha256.Trim()
                     : null;
 
-                if (expectedHash == null && !string.IsNullOrWhiteSpace(info.ChecksumsUrl))
+                if (expectedHash == null && IsAllowedGitHubReleaseUrl(info.ChecksumsUrl, out var checksumsUri) && checksumsUri != null)
                 {
                     try
                     {
-                        string checksumsText = await _httpClient.GetStringAsync(info.ChecksumsUrl, cancellationToken);
+                        string checksumsText = await GetStringBoundedAsync(ApiClient, checksumsUri, 64 * 1024, cancellationToken);
                         expectedHash = ParseChecksumForAsset(checksumsText, "Kestrel.exe");
                     }
                     catch (OperationCanceledException)
                     {
                         throw;
                     }
-                    catch { /* Non-fatal if checksums.txt cannot be fetched */ }
+                    catch { /* Handled fail-closed below when expectedHash remains null */ }
                 }
 
-                if (!string.IsNullOrWhiteSpace(expectedHash))
+                if (string.IsNullOrWhiteSpace(expectedHash) || !IsSha256Hex(expectedHash))
                 {
-                    string actualHash;
-                    await using (var verifyStream = File.OpenRead(stagedPath))
-                    {
-                        byte[] hashBytes = await SHA256.HashDataAsync(verifyStream, cancellationToken);
-                        actualHash = Convert.ToHexString(hashBytes);
-                    }
+                    TryDeleteFile(stagedPath);
+                    return new SelfUpdateResult(false, false, "Update aborted: SHA-256 checksum is missing or invalid.");
+                }
 
-                    if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
-                    {
-                        TryDeleteFile(stagedPath);
-                        return new SelfUpdateResult(false, false, "Downloaded update failed SHA-256 verification.");
-                    }
+                string actualHash;
+                await using (var verifyStream = File.OpenRead(stagedPath))
+                {
+                    byte[] hashBytes = await SHA256.HashDataAsync(verifyStream, cancellationToken);
+                    actualHash = Convert.ToHexString(hashBytes);
+                }
+
+                if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    TryDeleteFile(stagedPath);
+                    return new SelfUpdateResult(false, false, "Downloaded update failed SHA-256 verification.");
                 }
 
                 progress?.Report(new UpdateProgressReport(UpdateStage.Installing, downloaded, totalBytes > 0 ? totalBytes : downloaded, 100));
 
-                string script = BuildSelfUpdateScript(currentExePath, stagedPath, Environment.ProcessId, info.LatestTag);
+                string script = BuildSelfUpdateScript(currentExePath, stagedPath, Environment.ProcessId, info.LatestTag, expectedHash);
                 string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
                 string psExe = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.System),
@@ -603,7 +767,10 @@ namespace Kestrel.Services
         {
             try
             {
-                string target = !string.IsNullOrEmpty(url) ? url : (CachedUpdateInfo?.HtmlUrl ?? "https://github.com/Noventra-labs/Kestrel/releases/latest");
+                string candidate = !string.IsNullOrEmpty(url) ? url : (CachedUpdateInfo?.HtmlUrl ?? FallbackReleaseUrl);
+                string target = IsAllowedGitHubReleaseUrl(candidate, out var safeUri) && safeUri != null
+                    ? safeUri.AbsoluteUri
+                    : FallbackReleaseUrl;
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = target,

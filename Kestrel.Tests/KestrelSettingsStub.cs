@@ -15,6 +15,7 @@ namespace Kestrel.Services
     {
         public static KestrelSettings Current { get; } = new();
         public bool EnableToastNotifications { get; set; } = false;
+        public bool EnableClipboardHistory { get; set; } = true;
         public bool EnableMemReduct { get; set; } = true;
         public bool AutoMemReductEnabled { get; set; } = false;
         public int AutoMemReductThreshold { get; set; } = 85;
@@ -24,12 +25,16 @@ namespace Kestrel.Services
         public bool EnablePowerTools { get; set; } = true;
         public string GetApiKeyForProvider(string provider) => "";
         public void Save(bool notify = true) { }
-        public static string InferProviderFromModel(string? model) => model switch
+        public static string InferProviderFromModel(string? model)
         {
-            "gpt-test" or "openai" => "openai",
-            "claude-test" or "anthropic" => "anthropic",
-            "llama-test" or "groq" => "groq",
-            _ => "gemini"
-        };
+            var m = (model ?? "").Trim().ToLowerInvariant();
+            if (m.StartsWith("gpt") || m.StartsWith("o1") || m.StartsWith("o3") || m.Contains("openai"))
+                return "openai";
+            if (m.StartsWith("claude") || m.Contains("anthropic"))
+                return "anthropic";
+            if (m.StartsWith("llama") || m.StartsWith("mixtral") || m.StartsWith("deepseek") || m.Contains("groq") || m.Contains("llama"))
+                return "groq";
+            return "gemini";
+        }
     }
 }

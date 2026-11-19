@@ -29,6 +29,7 @@ namespace Kestrel
 
         private static Mutex? _singleInstanceMutex;
         private MainWindow? _mainWindow;
+        private static readonly object LogLock = new();
         private static readonly string LogFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Kestrel",
@@ -38,11 +39,19 @@ namespace Kestrel
         {
             try
             {
-                var dir = Path.GetDirectoryName(LogFile);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
+                lock (LogLock)
+                {
+                    var dir = Path.GetDirectoryName(LogFile);
+                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                        Directory.CreateDirectory(dir);
 
-                File.AppendAllText(LogFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
+                    if (File.Exists(LogFile) && new FileInfo(LogFile).Length > 2 * 1024 * 1024)
+                    {
+                        File.Move(LogFile, LogFile + ".1", overwrite: true);
+                    }
+
+                    File.AppendAllText(LogFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}{Environment.NewLine}");
+                }
             }
             catch { }
         }
@@ -88,7 +97,7 @@ namespace Kestrel
             {
                 var current = Process.GetCurrentProcess();
                 var others = Process.GetProcessesByName(current.ProcessName)
-                    .Where(p => p.Id != current.Id)
+                    .Where(p => p.Id != current.Id && p.SessionId == current.SessionId)
                     .ToList();
                 foreach (var old in others)
                 {

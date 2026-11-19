@@ -429,16 +429,22 @@ namespace KestrelInstaller
         {
             string[] names = { "Kestrel", "Beam", "Uninstall-Kestrel" };
             int currentPid = Environment.ProcessId;
+            string taskkillExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "taskkill.exe");
 
             foreach (var name in names)
             {
                 try
                 {
-                    var psi = new ProcessStartInfo("taskkill.exe", $"/F /T /IM {name}.exe")
+                    if (!File.Exists(taskkillExe)) continue;
+                    var psi = new ProcessStartInfo(taskkillExe)
                     {
                         CreateNoWindow = true,
                         UseShellExecute = false
                     };
+                    psi.ArgumentList.Add("/F");
+                    psi.ArgumentList.Add("/T");
+                    psi.ArgumentList.Add("/IM");
+                    psi.ArgumentList.Add($"{name}.exe");
                     using var proc = Process.Start(psi);
                     proc?.WaitForExit(1000);
                 }
@@ -468,6 +474,9 @@ namespace KestrelInstaller
                     }
                     else
                     {
+                        if ((File.GetAttributes(installDir) & FileAttributes.ReparsePoint) != 0)
+                            throw new IOException("Installation folder cannot be a symlink or directory junction.");
+
                         // Clear read-only from files (never touch folder attributes directly)
                         foreach (var file in Directory.GetFiles(installDir))
                         {
@@ -489,17 +498,39 @@ namespace KestrelInstaller
                     }
                     catch { }
 
-                    // Grant full permissions via icacls (elevated as Administrator)
+                    // Repair directory ACLs only inside the user's profile; preserve Program Files permissions.
                     try
                     {
-                        string user = Environment.UserName;
-                        var psi = new ProcessStartInfo("icacls.exe", $"\"{installDir}\" /grant \"{user}:(OI)(CI)F\" /grant \"*S-1-5-32-544:(OI)(CI)F\" /grant \"*S-1-5-18:(OI)(CI)F\" /T /Q /C")
+                        string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                        string userNorm = string.IsNullOrWhiteSpace(userProfile)
+                            ? string.Empty
+                            : Path.GetFullPath(userProfile).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        string installNorm = Path.GetFullPath(installDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        bool underUserProfile = !string.IsNullOrEmpty(userNorm) &&
+                            (string.Equals(installNorm, userNorm, StringComparison.OrdinalIgnoreCase) ||
+                             installNorm.StartsWith(userNorm + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+                        string? userSid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value;
+                        string icaclsExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "icacls.exe");
+                        if (underUserProfile && !string.IsNullOrEmpty(userSid) && File.Exists(icaclsExe))
                         {
-                            CreateNoWindow = true,
-                            UseShellExecute = false
-                        };
-                        using var proc = Process.Start(psi);
-                        proc?.WaitForExit(1000);
+                            var psi = new ProcessStartInfo(icaclsExe)
+                            {
+                                CreateNoWindow = true,
+                                UseShellExecute = false
+                            };
+                            psi.ArgumentList.Add(installDir);
+                            psi.ArgumentList.Add("/grant");
+                            psi.ArgumentList.Add($"*{userSid}:(OI)(CI)F");
+                            psi.ArgumentList.Add("/grant");
+                            psi.ArgumentList.Add("*S-1-5-32-544:(OI)(CI)F");
+                            psi.ArgumentList.Add("/grant");
+                            psi.ArgumentList.Add("*S-1-5-18:(OI)(CI)F");
+                            psi.ArgumentList.Add("/Q");
+                            psi.ArgumentList.Add("/C");
+                            using var proc = Process.Start(psi);
+                            proc?.WaitForExit(1000);
+                        }
                     }
                     catch { }
 
@@ -620,6 +651,9 @@ namespace KestrelInstaller
                     stream.CopyTo(file);
                     file.Flush(true);
                 }
+
+                if (File.Exists(destination) && (File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Refusing to overwrite symlink or reparse point.");
 
                 bool moved = false;
                 for (int attempt = 0; attempt < 5; attempt++)

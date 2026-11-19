@@ -59,6 +59,53 @@ namespace Kestrel.Services
             return request;
         }
 
+        private static async Task<string> ReadBoundedErrorAsync(
+            HttpContent content,
+            CancellationToken cancellationToken,
+            string? secretToRedact = null)
+        {
+            const int maxReadChars = 2048;
+            const int maxOutChars = 512;
+            using var stream = await content.ReadAsStreamAsync(cancellationToken);
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            char[] buffer = new char[maxReadChars];
+            int total = 0;
+            while (total < buffer.Length)
+            {
+                int read = await reader.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken);
+                if (read == 0) break;
+                total += read;
+            }
+
+            string raw = new string(buffer, 0, total);
+            if (!string.IsNullOrEmpty(secretToRedact))
+                raw = raw.Replace(secretToRedact, "[REDACTED]", StringComparison.Ordinal);
+
+            return raw.Length <= maxOutChars ? raw : raw[..maxOutChars] + "...";
+        }
+
+        internal static string ValidateGeminiModel(string model)
+        {
+            string clean = (model ?? string.Empty).Trim();
+            if (clean.StartsWith("models/", StringComparison.OrdinalIgnoreCase))
+                clean = clean["models/".Length..];
+
+            if (clean.Length == 0 || clean.Length > 128)
+                throw new ArgumentException("Invalid Gemini model identifier.", nameof(model));
+
+            foreach (char c in clean)
+            {
+                bool allowed = (c >= 'a' && c <= 'z') ||
+                               (c >= 'A' && c <= 'Z') ||
+                               (c >= '0' && c <= '9') ||
+                               c == '.' || c == '_' || c == '-';
+                if (!allowed)
+                    throw new ArgumentException("Invalid Gemini model identifier.", nameof(model));
+            }
+
+            return clean;
+        }
+
         public static async Task<(bool Ok, string Message)> SaveKeyToSupabaseVaultAsync(
             string backendUrl,
             string modelOrProvider,
@@ -89,7 +136,7 @@ namespace Kestrel.Services
                         ? (true, $"Encrypted & stored '{provider}' key in Supabase Vault")
                         : (false, "Cloud storage did not confirm saving the key. Your local key is unchanged.");
                 }
-                var err = await res.Content.ReadAsStringAsync(cts.Token);
+                var err = await ReadBoundedErrorAsync(res.Content, cts.Token, apiKey.Trim());
                 return (false, $"Vault error ({(int)res.StatusCode}): {err}");
             }
             catch
@@ -134,6 +181,8 @@ namespace Kestrel.Services
 
             try
             {
+                if (string.IsNullOrWhiteSpace(backendUrl))
+                    throw new HttpRequestException("Cloud backend URL is not configured.");
 
                 var payload = new
                 {
@@ -152,7 +201,7 @@ namespace Kestrel.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    var err = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var err = await ReadBoundedErrorAsync(response.Content, cancellationToken, effectiveKey);
                     throw new HttpRequestException($"Cloud AI Service Error ({response.StatusCode}): {err}");
                 }
 
@@ -242,7 +291,8 @@ namespace Kestrel.Services
             Action<string> onDelta,
             CancellationToken cancellationToken)
         {
-            var endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={apiKey}";
+            string safeModel = ValidateGeminiModel(model);
+            var endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(safeModel)}:streamGenerateContent?alt=sse";
             var payload = new
             {
                 contents = messages.Select(m => new
@@ -254,11 +304,12 @@ namespace Kestrel.Services
 
             var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = jsonContent };
+            request.Headers.Add("x-goog-api-key", apiKey);
             using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var err = await response.Content.ReadAsStringAsync(cancellationToken);
+                var err = await ReadBoundedErrorAsync(response.Content, cancellationToken, apiKey);
                 throw new Exception($"Gemini Direct API Error ({response.StatusCode}): {err}");
             }
 
@@ -313,7 +364,7 @@ namespace Kestrel.Services
             using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                var err = await response.Content.ReadAsStringAsync(cancellationToken);
+                var err = await ReadBoundedErrorAsync(response.Content, cancellationToken, apiKey);
                 throw new Exception($"Direct Provider API Error ({response.StatusCode}): {err}");
             }
 
@@ -370,7 +421,7 @@ namespace Kestrel.Services
             using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                var err = await response.Content.ReadAsStringAsync(cancellationToken);
+                var err = await ReadBoundedErrorAsync(response.Content, cancellationToken, apiKey);
                 throw new Exception($"Anthropic Direct API Error ({response.StatusCode}): {err}");
             }
 

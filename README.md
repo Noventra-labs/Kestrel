@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Noventra-labs/Kestrel/releases/tag/v2.4.2"><img src="https://img.shields.io/badge/Release-v2.4.2-ff4444?style=flat-square" alt="Version 2.4.2" /></a>
+  <a href="https://github.com/Noventra-labs/Kestrel/releases/tag/v2.4.3"><img src="https://img.shields.io/badge/Release-v2.4.3-ff4444?style=flat-square" alt="Version 2.4.3" /></a>
   <img src="https://img.shields.io/badge/License-MIT-10b981?style=flat-square" alt="MIT License" />
   <img src="https://img.shields.io/badge/Platform-Windows%2011%20%7C%20Windows%2010%20(x64)-0078d4?style=flat-square" alt="Windows 11 / 10" />
   <img src="https://img.shields.io/badge/Telemetry-Zero-10b981?style=flat-square" alt="Zero Telemetry" />
@@ -32,8 +32,8 @@ Pressing the <kbd>Win</kbd> key summons an omnibar for launching applications, s
 
 | Edition | Package Size | Target Environment | Direct Download |
 | :--- | :--- | :--- | :--- |
-| **Windows Installer** (`Kestrel-Setup.exe`) | **~167.1 MB** | Recommended for primary workstations. Provides a guided setup wizard, Start Menu and Desktop shortcuts, optional startup on boot, and Windows Add/Remove Programs registration. | [**Download Installer (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.2/Kestrel-Setup.exe) |
-| **Portable Executable** (`Kestrel.exe`) | **~95.1 MB** | Self-contained single binary. Runs directly from any directory or removable drive and supports in-app self-updates. | [**Download Portable (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.2/Kestrel.exe) |
+| **Windows Installer** (`Kestrel-Setup.exe`) | **~167.1 MB** | Recommended for primary workstations. Provides a guided setup wizard, Start Menu and Desktop shortcuts, optional startup on boot, and Windows Add/Remove Programs registration. | [**Download Installer (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.3/Kestrel-Setup.exe) |
+| **Portable Executable** (`Kestrel.exe`) | **~95.1 MB** | Self-contained single binary. Runs directly from any directory or removable drive and supports in-app self-updates. | [**Download Portable (.exe)**](https://github.com/Noventra-labs/Kestrel/releases/download/v2.4.3/Kestrel.exe) |
 
 ### System Requirements
 - **Operating System:** Windows 11 (Build 22621+ for DWM Acrylic backdrop and rounded window corners) or Windows 10 (build 19041+ / version 2004+) 64-bit (`x64`).

@@ -13,6 +13,8 @@
     <Compile Include="../Kestrel/Services/MemoryReductService.cs" Link="MemoryReductService.cs" />
     <Compile Include="../Kestrel/Services/SearchEngine.cs" Link="SearchEngine.cs" />
     <Compile Include="../Kestrel/Services/PowerDeveloperToolsService.cs" Link="PowerDeveloperToolsService.cs" />
+    <Compile Include="../Kestrel/Services/ClipboardService.cs" Link="ClipboardService.cs" />
+    <Compile Include="../Kestrel/Services/CalculatorService.cs" Link="CalculatorService.cs" />
     <Compile Include="../Kestrel/Services/ToastNotification.cs" Link="ToastNotification.cs" />
     <Compile Include="../Kestrel/Services/UpdateService.cs" Link="UpdateService.cs" />
     <Compile Include="../Kestrel/Services/ThemeAppearance.cs" Link="ThemeAppearance.cs" />

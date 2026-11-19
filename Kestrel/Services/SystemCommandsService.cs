@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using Microsoft.Win32;
 using Kestrel.Interop;
 using Kestrel.Models;
@@ -567,6 +567,12 @@ namespace Kestrel.Services
                 var iconShield = IconGenerator.GetSquircleIcon(SquircleTheme.AdminGold, IconGenerator.PathShield, asStroke: true);
                 var iconTerm = IconGenerator.GetSquircleIcon(SquircleTheme.TerminalSlate, IconGenerator.PathTerminal, asStroke: true);
 
+                var sysDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                var localWinAppsWt = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "WindowsApps", "wt.exe");
+                var wtExe = File.Exists(localWinAppsWt) ? localWinAppsWt : "wt.exe";
+
                 commands.AddRange(new LauncherItem[]
                 {
                     new()
@@ -577,7 +583,7 @@ namespace Kestrel.Services
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconShield,
-                        Action = () => AppScanner.LaunchAsAdmin(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+                        Action = () => AppScanner.LaunchAsAdmin(Path.Combine(sysDir, "WindowsPowerShell", "v1.0", "powershell.exe"))
                     },
                     new()
                     {
@@ -587,7 +593,7 @@ namespace Kestrel.Services
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconShield,
-                        Action = () => AppScanner.LaunchAsAdmin(@"C:\Windows\System32\cmd.exe")
+                        Action = () => AppScanner.LaunchAsAdmin(Path.Combine(sysDir, "cmd.exe"))
                     },
                     new()
                     {
@@ -597,7 +603,7 @@ namespace Kestrel.Services
                         Category = "Developer",
                         Section = "Commands",
                         Icon = iconShield,
-                        Action = () => AppScanner.LaunchAsAdmin("wt.exe")
+                        Action = () => AppScanner.LaunchAsAdmin(wtExe)
                     },
                     new()
                     {
@@ -624,11 +630,8 @@ namespace Kestrel.Services
                         Icon = iconKey,
                         Action = () =>
                         {
-                            const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
-                            var bytes = RandomNumberGenerator.GetBytes(20);
-                            var pass = new char[20];
-                            for (int i = 0; i < 20; i++) pass[i] = chars[bytes[i] % chars.Length];
-                            System.Windows.Clipboard.SetText(new string(pass));
+                            string pass = PowerDeveloperToolsService.GenerateStrongPassword(20);
+                            ClipboardService.SetSensitiveText(pass);
                             ToastNotification.Show("✓ Copied 20-character Strong Password to Clipboard");
                         }
                     },
@@ -780,7 +783,11 @@ namespace Kestrel.Services
                         Category = "System",
                         Section = "System",
                         Icon = iconProc,
-                        Action = () => RunHiddenCmd("taskkill /f /im explorer.exe & start explorer.exe")
+                        Action = () =>
+                        {
+                            StartSystemProcess("taskkill.exe", waitForExit: true, "/f", "/im", "explorer.exe");
+                            StartWindowsProcess("explorer.exe");
+                        }
                     },
                     new()
                     {
@@ -790,7 +797,7 @@ namespace Kestrel.Services
                         Category = "System",
                         Section = "System",
                         Icon = iconGear,
-                        Action = () => RunHiddenCmd("rundll32.exe sysdm.cpl,EditEnvironmentVariables")
+                        Action = () => StartSystemProcess("rundll32.exe", waitForExit: false, "sysdm.cpl,EditEnvironmentVariables")
                     },
                     new()
                     {
@@ -810,7 +817,7 @@ namespace Kestrel.Services
                         Category = "System",
                         Section = "System",
                         Icon = iconPower,
-                        Action = () => RunHiddenCmd("shutdown /r /t 5")
+                        Action = () => StartSystemProcess("shutdown.exe", waitForExit: false, "/r", "/t", "5")
                     },
                     new()
                     {
@@ -820,7 +827,7 @@ namespace Kestrel.Services
                         Category = "System",
                         Section = "System",
                         Icon = iconPower,
-                        Action = () => RunHiddenCmd("shutdown /s /t 5")
+                        Action = () => StartSystemProcess("shutdown.exe", waitForExit: false, "/s", "/t", "5")
                     }
                 });
             }
@@ -922,6 +929,7 @@ namespace Kestrel.Services
                         : $"{item.Title} (PID: {item.Id})";
 
                     int pid = item.Id;
+                    string expectedProcName = item.Name;
                     list.Add(new LauncherItem
                     {
                         Id = $"proc:{pid}",
@@ -933,18 +941,15 @@ namespace Kestrel.Services
                         KeepOpenOnExecute = true,
                         Action = () =>
                         {
-                            try
+                            if (TryKillProcessVerified(pid, expectedProcName, out string? err))
                             {
-                                using var target = Process.GetProcessById(pid);
-                                string pName = target.ProcessName;
-                                target.Kill();
-                                ToastNotification.Show($"✓ Terminated {pName} (PID {pid})");
+                                ToastNotification.Show($"✓ Terminated {expectedProcName} (PID {pid})");
                                 InvalidateProcessSnapshot();
                                 onRefresh();
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                ToastNotification.Show($"Could not kill PID {pid}: {ex.Message}");
+                                ToastNotification.Show($"Could not kill PID {pid}: {err}");
                             }
                         }
                     });
@@ -1117,17 +1122,82 @@ namespace Kestrel.Services
             return "127.0.0.1";
         }
 
-        private static void RunHiddenCmd(string command)
+        internal static bool TryKillProcessVerified(int pid, string expectedProcessName, out string? error)
+        {
+            error = null;
+            if (pid <= 4 || pid == Environment.ProcessId)
+            {
+                error = "Cannot terminate protected or current process.";
+                return false;
+            }
+
+            if (MemoryReductService.IsProcessProtected(expectedProcessName, pid))
+            {
+                error = $"Process '{expectedProcessName}' is protected.";
+                return false;
+            }
+
+            try
+            {
+                using var target = Process.GetProcessById(pid);
+                string actualName = target.ProcessName;
+                if (MemoryReductService.IsProcessProtected(actualName, pid))
+                {
+                    error = $"Process '{actualName}' is protected.";
+                    return false;
+                }
+
+                if (!string.IsNullOrWhiteSpace(expectedProcessName) &&
+                    !string.Equals(actualName, expectedProcessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    error = $"PID {pid} is now '{actualName}', expected '{expectedProcessName}'.";
+                    return false;
+                }
+
+                target.Kill();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static void StartSystemProcess(string systemExe, bool waitForExit, params string[] args)
         {
             try
             {
-                var psi = new ProcessStartInfo("cmd.exe", "/c " + command)
+                string exePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), systemExe);
+                if (!File.Exists(exePath)) return;
+
+                var psi = new ProcessStartInfo(exePath)
                 {
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
-                Process.Start(psi);
+                foreach (string arg in args)
+                    psi.ArgumentList.Add(arg);
+
+                using var proc = Process.Start(psi);
+                if (waitForExit)
+                    proc?.WaitForExit(1500);
+            }
+            catch { }
+        }
+
+        private static void StartWindowsProcess(string windowsExe)
+        {
+            try
+            {
+                string exePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), windowsExe);
+                if (!File.Exists(exePath)) return;
+
+                using var proc = Process.Start(new ProcessStartInfo(exePath)
+                {
+                    UseShellExecute = false
+                });
             }
             catch { }
         }

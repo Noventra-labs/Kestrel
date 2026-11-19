@@ -58,6 +58,14 @@ namespace Kestrel.Services
             }
         }
 
+        internal static bool IsUwpOrProtocolPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            return path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase) ||
+                   (path.Contains('!') && !Path.IsPathFullyQualified(path));
+        }
+
         public static List<LauncherItem> ScanApps(bool allowCache = true)
         {
             if (allowCache && File.Exists(CacheFile))
@@ -66,7 +74,7 @@ namespace Kestrel.Services
                 {
                     var json = File.ReadAllText(CacheFile);
                     var cached = JsonSerializer.Deserialize<List<CachedAppRecord>>(json);
-                    if (cached != null && cached.Count > 0 && cached.Any(c => c.Path.Contains("!")))
+                    if (cached != null && cached.Count > 0 && cached.Any(c => IsUwpOrProtocolPath(c.Path)))
                     {
                         return ReconstructFromCache(cached);
                     }
@@ -244,8 +252,17 @@ namespace Kestrel.Services
 
             foreach (var r in records)
             {
-                bool isUwp = r.Path.Contains("!") || r.Path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || r.Path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase);
-                if (!isUwp && !File.Exists(r.Path)) continue;
+                bool isUwp = IsUwpOrProtocolPath(r.Path);
+                if (isUwp)
+                {
+                    if (r.Path.IndexOfAny(new[] { '"', '\r', '\n', '\0' }) >= 0 || r.Path.Contains("..", StringComparison.Ordinal))
+                        continue;
+                }
+                else
+                {
+                    if (!Path.IsPathFullyQualified(r.Path) || !File.Exists(r.Path))
+                        continue;
+                }
                 if (!scannedNames.Add(r.Name)) continue;
 
                 var icon = ShellIconHelper.GetIcon(r.Path);
@@ -259,7 +276,7 @@ namespace Kestrel.Services
                     {
                         kw = "store app appstore shop market windows store uwp download software microsoft buy";
                     }
-                    else if (r.Subtitle.Equals("Windows App", StringComparison.OrdinalIgnoreCase) || r.Path.Contains("!"))
+                    else if (r.Subtitle.Equals("Windows App", StringComparison.OrdinalIgnoreCase) || IsUwpOrProtocolPath(r.Path))
                     {
                         kw = "app store windows app uwp msix";
                     }
@@ -299,29 +316,36 @@ namespace Kestrel.Services
             var defaultSysIcon = IconGenerator.GetSquircleIcon(SquircleTheme.SettingsSlate, IconGenerator.PathGear);
             var defaultTermIcon = IconGenerator.GetSquircleIcon(SquircleTheme.WindowBlue, IconGenerator.PathTerminal);
 
+            string sysDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+            string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            string localWinAppsWt = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Microsoft", "WindowsApps", "wt.exe");
+            string wtPath = File.Exists(localWinAppsWt) ? localWinAppsWt : "wt.exe";
+
             var systemTools = new (string Name, string Path, string Category)[]
             {
-                ("PowerShell (Run as Administrator)", @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "Application"),
-                ("PowerShell", @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "Application"),
-                ("Command Prompt (Admin)", @"C:\Windows\System32\cmd.exe", "Application"),
-                ("Command Prompt", @"C:\Windows\System32\cmd.exe", "Application"),
-                ("Component Services", @"C:\Windows\System32\dcomcnfg.exe", "Application"),
-                ("Computer Management", @"C:\Windows\System32\compmgmt.msc", "Application"),
-                ("Color Management", @"C:\Windows\System32\colorcpl.exe", "Control Panel"),
-                ("Ease of Access Center", @"C:\Windows\System32\utilman.exe", "Control Panel"),
-                ("Task Manager", @"C:\Windows\System32\taskmgr.exe", "Application"),
-                ("Windows Terminal", "wt.exe", "Application"),
+                ("PowerShell (Run as Administrator)", Path.Combine(sysDir, "WindowsPowerShell", "v1.0", "powershell.exe"), "Application"),
+                ("PowerShell", Path.Combine(sysDir, "WindowsPowerShell", "v1.0", "powershell.exe"), "Application"),
+                ("Command Prompt (Admin)", Path.Combine(sysDir, "cmd.exe"), "Application"),
+                ("Command Prompt", Path.Combine(sysDir, "cmd.exe"), "Application"),
+                ("Component Services", Path.Combine(sysDir, "dcomcnfg.exe"), "Application"),
+                ("Computer Management", Path.Combine(sysDir, "compmgmt.msc"), "Application"),
+                ("Color Management", Path.Combine(sysDir, "colorcpl.exe"), "Control Panel"),
+                ("Ease of Access Center", Path.Combine(sysDir, "utilman.exe"), "Control Panel"),
+                ("Task Manager", Path.Combine(sysDir, "taskmgr.exe"), "Application"),
+                ("Windows Terminal", wtPath, "Application"),
                 ("Windows Settings", "ms-settings:", "System Preference"),
                 ("Microsoft Store", "ms-windows-store:", "Application"),
-                ("File Explorer", @"C:\Windows\explorer.exe", "Application"),
-                ("Notepad", @"C:\Windows\System32\notepad.exe", "Application"),
-                ("Calculator", @"C:\Windows\System32\calc.exe", "Application"),
-                ("Control Panel", @"C:\Windows\System32\control.exe", "Control Panel"),
-                ("Device Manager", @"C:\Windows\System32\devmgmt.msc", "Control Panel"),
-                ("Disk Management", @"C:\Windows\System32\diskmgmt.msc", "Control Panel"),
-                ("Services", @"C:\Windows\System32\services.msc", "Control Panel"),
-                ("Registry Editor", @"C:\Windows\regedit.exe", "Application"),
-                ("Resource Monitor", @"C:\Windows\System32\resmon.exe", "Application")
+                ("File Explorer", Path.Combine(winDir, "explorer.exe"), "Application"),
+                ("Notepad", Path.Combine(sysDir, "notepad.exe"), "Application"),
+                ("Calculator", Path.Combine(sysDir, "calc.exe"), "Application"),
+                ("Control Panel", Path.Combine(sysDir, "control.exe"), "Control Panel"),
+                ("Device Manager", Path.Combine(sysDir, "devmgmt.msc"), "Control Panel"),
+                ("Disk Management", Path.Combine(sysDir, "diskmgmt.msc"), "Control Panel"),
+                ("Services", Path.Combine(sysDir, "services.msc"), "Control Panel"),
+                ("Registry Editor", Path.Combine(winDir, "regedit.exe"), "Application"),
+                ("Resource Monitor", Path.Combine(sysDir, "resmon.exe"), "Application")
             };
 
             foreach (var tool in systemTools)
@@ -480,7 +504,7 @@ namespace Kestrel.Services
         {
             try
             {
-                if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                if (IsUwpOrProtocolPath(path))
                 {
                     LaunchUwpApp(path);
                     return;
@@ -502,7 +526,7 @@ namespace Kestrel.Services
         {
             try
             {
-                if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                if (IsUwpOrProtocolPath(path))
                 {
                     // Packaged / UWP apps run inside an AppContainer sandbox and cannot be elevated via Win32 'runas'
                     LaunchUwpApp(path);
@@ -526,19 +550,26 @@ namespace Kestrel.Services
         {
             try
             {
-                if (path.Contains("!") || path.StartsWith("shell:AppsFolder", StringComparison.OrdinalIgnoreCase) || path.StartsWith("ms-", StringComparison.OrdinalIgnoreCase))
+                string explorerExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                if (!File.Exists(explorerExe)) explorerExe = "explorer.exe";
+
+                if (IsUwpOrProtocolPath(path))
                 {
-                    Process.Start("explorer.exe", "shell:AppsFolder");
+                    Process.Start(new ProcessStartInfo(explorerExe) { ArgumentList = { "shell:AppsFolder" } });
                     return;
                 }
 
-                if (File.Exists(path) || Directory.Exists(path))
+                if (!string.IsNullOrWhiteSpace(path) &&
+                    path.IndexOfAny(new[] { '"', '\r', '\n', '\0' }) < 0 &&
+                    Path.IsPathFullyQualified(path) &&
+                    (File.Exists(path) || Directory.Exists(path)))
                 {
-                    Process.Start("explorer.exe", $"/select,\"{path}\"");
+                    string full = Path.GetFullPath(path);
+                    Process.Start(explorerExe, $"/select,\"{full}\"");
                 }
                 else
                 {
-                    Process.Start("explorer.exe");
+                    Process.Start(explorerExe);
                 }
             }
             catch (Exception ex)
