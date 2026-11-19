@@ -80,6 +80,7 @@ worktrees/
 .github/hooks/
 skills-lock.json
 brag-output/
+brag-output*/
 kestrel-film/
 
 # =============================================================================
